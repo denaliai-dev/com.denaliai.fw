@@ -1,0 +1,28 @@
+Core
+	MetricsEngine
+	DenaliAIApplication
+	SystemStatus - records up/down/intermittant real-time status of remote connections
+	Thread pools - io and task
+	RCFuture/RCPromise/RCFutureCombiner mechanisms
+	RCCountdownLatch
+	ExceptionReporter
+		We should record details that are useful in writing exception logs to disk
+		Record request data that started the current Operation
+		Record data pulled from remote sources (like dbs and whatnot)
+		On an exception, we can flush the exception and all details to disk (like a crash report)
+		This should be self-limiting so we don't run a machine out of disk space
+	logging - log4j/slf4j/java util logging
+http
+	HttpServer
+	HttpClient
+socket
+	SocketServer
+	SocketClient
+mongo
+	MongoDBClient
+
+Netty
+Jackson
+For process spawning, use either NuProcess or speech POC process spawning
+Rhino if we need javascript
+jUnit for unit tests

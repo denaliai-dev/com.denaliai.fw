@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.denaliai.fw</groupId>
+	<artifactId>fw-build</artifactId>
+	<version>${revision}</version>
+	<packaging>pom</packaging>
+	<name>DenaliAI Framework Build</name>
+	<description>DenaliAI Framework Build</description>
+
+	<properties>
+		<revision>1.0.0</revision>
+		<main.basedir>${basedir}</main.basedir>
+		<flatten-maven-plugin.version>1.1.0</flatten-maven-plugin.version>
+	</properties>
+
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>flatten-maven-plugin</artifactId>
+					<version>${flatten-maven-plugin.version}</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<inherited>false</inherited>
+				<executions>
+					<execution>
+						<!-- Flatten and simplify our own POM for install/deploy -->
+						<id>flatten</id>
+						<phase>process-resources</phase>
+						<goals>
+							<goal>flatten</goal>
+						</goals>
+						<configuration>
+							<updatePomFile>true</updatePomFile>
+							<pomElements>
+								<parent>expand</parent>
+								<name>keep</name>
+								<description>keep</description>
+								<url>expand</url>
+								<properties>keep</properties>
+								<pluginManagement>keep</pluginManagement>
+								<dependencyManagement>keep</dependencyManagement>
+								<build>keep</build>
+							</pomElements>
+						</configuration>
+					</execution>
+					<execution>
+						<id>flatten-clean</id>
+						<phase>clean</phase>
+						<goals>
+							<goal>clean</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<profile>
+			<id>default</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<modules>
+				<module>project</module>
+			</modules>
+		</profile>
+  </profiles>
+
+</project>

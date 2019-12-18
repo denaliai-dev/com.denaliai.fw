@@ -1,0 +1,240 @@
+>>>>
+>>>> Need a way to get a copy of counters in their current form for display in realtime on a web page
+>>>>
+
+MetricsEngine
+	// These are snapshot at the time period, but live forever
+	IntTotalCounter registerIntTotalCounter(String name)
+	
+	// These reset every time period
+	IntCounter registerIntCounter(String name)
+	RateCounter registerRateCounter(String name)
+	
+	TimerInstance startRateTimer();
+	
+	void snapshot(); // This creates a new SamplePeriod and ends the current one
+	
+DurationCounter // Min/Max/Avg duration and count for time period
+	String name
+	int indexOfCount
+	int indexOfTotal
+	int indexOfMin
+	int indexOfMax
+	
+	void record(TimerInstance timer)
+
+IntCounter // count per time period
+	String name
+	int indexOfCount
+	
+	void increment();
+
+IntTotalCounter // running total/active count
+	String name
+	int indexOfNum
+	
+	void increment();
+	void decrement();
+
+
+CounterInstance
+	SamplePeriod period;  // This is the queue that owns this instance
+	int[] data; // All the metrics data
+	
+	static CounterInstance current();
+	static void checkout(); // This grabs the one from the current SamplePeriod FOR THIS THREAD and sets it in TLS
+	static void checkin(); // This returns the instance in TLS to the owned SamplePeriod... it sits and waits for this thread to check it out again (so we don't have to contend.  It lives in SamplePeriod, so when a new one gets put in place, the old one went with it)
+	
+On start of a thread run it checks out a counter instance from a queue
+Each counter uses the current counter instance to record its data
+At the end of the thread run it checks the instance back in for someone else to use
+On each snapshot (time period), a new queue is created and the old one held until all checked out instances are returend
+	Then it totals up all of the data instances (by adding the Int and IntTotal together and min/max/avg the Rates) to produce the final results
+
+
+thought:
+	instead of increments and whatnot, how about we just take the static counter registration and add it to Mpsc queues:
+		increment queue
+		decrement queue
+		timer record (would set the static counter registration into the timer object)
+		boolean snapshotNow (write-only by calling MetricsEngine.snapshot() - which triggers the perpetual worker)
+		overflow queue (unbounded linked MpSc queue)
+	Use a perpetual worker to process the queues and do the processing on the data set
+	This way on a snapshot it is the perpetual worker that does the data set swap, so we never have to lock
+	The queues are fixed-size bounded queues (set large, like at 32k entries or something)
+		If they are full, uses a the thread pulls from an Operation RECYCLER, sets the operation type and submits to the overflow queue (which creates garbage)
+		When the worker is processing the overflow queue, it needs to increment a "'Number of Counter Overflows" IntCounter which we can monitor since this shouldn't happen
+
+thought 2:
+	each thread has its own container of fixed-size array SpSc queues (increment, decrement, and timer-record)
+		on creation, it submits the container object to a MpSc queue to give to worker
+		worker keeps the containers in a linkedlist of objects that have a atomicweakreference to the thread (so we know when the thread goes away)
+		thread keeps container in a weakreference within a TLS slot
+		If any are full,
+			the thread creates a new container with the respective queue doubled in size (up to a configurable max)
+			submits the new container to the worker (and submits a flag/message to worker to increment a "Number of Counter Overflows" IntCounter)
+			clears itself from old container's thread atomicweakreference
+			and sets the new container into TLS slot
+	worker's processing:
+		a) take all new thread container objects from queue and add to linkedlist
+		b) walk list, processing each of the queues in each container:
+			Do increment/decrement/record actions
+			Check if the weak reference to the thread is still there. If not, remove from list
+		c) check the time to see if it is snapshot time.  if so, process current snapshot data and prepare for next time period
+	Need a timer set to the snapshot time (wall-clock time) which triggers a worker run
+	
+thought 3:
+	each thread maintains a CounterInstance for itself tied the the current snapshot minute
+	When the thread creates the CounterInstance (with current snapshot num) it submits it to a MpSc message queue for the worker (same weak reference stuff as thought 2)
+	snapshot()
+		Submit RequestSnapshot to message queue
+		requestMoreWork()
+		
+	worker loop:
+		Process message queue
+			if CounterInstance, add to currentSnapshot list
+			if RequestSnapshot
+				If state != IDLE... what? Ignore?  Resubmit?
+				Calculate snapshot length in MS, using previous snapshot start time
+				Bump snapshot number
+				Set State to RUNNING_SNAPSHOT
+				move currentSnapshot to prevSnapshot
+				create a currentSnapshot list
+				set snapshot start time in NS
+		
+		if State is RUNNING_SNAPSHOT
+			walk the prevSnapshot and for each CounterInstance
+				tryLock
+					if fail lock, skip it
+					otherwise
+						it sets "old" flag
+						removes it from prevSnapshot
+						release lock
+						process CounterInstance
+			If prevSnapshot is empty
+				write/produce snapshot dataset
+				State = IDLE
+			elseif timeout for RUNNING_SNAPSHOT state
+				Remove/Process remaining previous snapshot's CounterInstances
+				State = IDLE
+			else
+				requestMoreWork() // Try again
+		
+	when thread gets its CounterInstance it does a trylock
+		if fail lock, we KNOW the CounterInstance is "old" so we create a new one (with current snapshot num) and use that
+		if we get lock
+			if "old" flag set or CounterInstance snapshot num != current snapshot number, we create a new one (with current snapshot num) and use that
+		apply counter data to new or locked CounterInstance
+		release lock
+	
+
+// Sample use:
+class MyLogic
+	private static final RateCounter m_requestRate = MetricsEngine.registerRateCounter("hits");
+	private static final IntTotalCounter m_activeRequests = MetricsEngine.registerRateCounter("active");
+	
+	private TimerInstance m_timer;
+	
+	void startRequest() {
+		m_timer = MetricsEnting.startRateTimer();
+		m_activeRequests.increment();
+	}
+	
+	
+	void endRequest() {
+		m_activeRequests.decrement();
+		m_requestRate.record(m_timer);
+		m_timer = null;
+	}
+	
+
+// Thoughts on CounterInstance.checkout()
+// Need to addref current SamplePeriod before the snapshot() task takes it
+static void checkout() {
+	SamplePeriod current = SamplePeriod.instance();
+	current.retain();
+	
+}
+
+Metrics
+	void startup() {
+		SamplePeriod.m_current = new SamplePeriod();
+		SetSamplePeriodTask t = new SetSamplePeriodTask();
+		for(Group g : eventLoopGroups) { // io group and task group
+			// Wake up each executor and get them to grab the current sample period
+			for(EventExecutor ex : g.iterator()) {
+				ex.execute(t);
+			}
+		}
+	}
+
+	void snapshot() {
+		SamplePeriod newPeriod = new SamplePeriod();
+		SetNewSamplePeriod t = new SetNewSamplePeriod(newPeriod);
+		for(Group g : eventLoopGroups) { // io group and task group
+			// Wake up each executor and get them to grab the current sample period
+			for(EventExecutor ex : g.iterator()) {
+				ex.execute(t);
+			}
+		}
+		SamplePeriod.m_current = newPeriod;
+	}
+	
+	void shutdown() {
+		// Loop through all executors and detach the sample period and counters?
+	}
+	
+class CounterInstance
+	FastThreadLocal<SamplePeriod> m_period;
+	FastThreadLocal<CounterInstance> m_counters;
+	
+	private static SamplePeriod period() {
+		SamplePeriod period = m_period.get();
+		if (period == null) {
+			// This should only happen on startup
+			period = SamplePeriod.m_current;
+			m_period.set(period);
+		}
+		return period;
+	}
+	
+	static void checkout() {
+		CounterInstance counters = m_counters.get();
+		if (counters == null) {
+			counters = period().createInstance();
+			m_counters.set(counters);
+		}
+	}
+	
+	static void checkin() {
+	}
+	
+	static void switchPeriod(SamplePeriod period) {
+		CounterInstance counters = period.createInstance();
+		m_period.set(period);
+		m_counters.set(counters);
+	}
+	
+class SetNewSamplePeriod implements Runnable {
+	private final RCCountdownLatch m_latch;
+	private final SamplePeriod m_period;
+	
+	SetNewSamplePeriod(SamplePeriod period, RCCountdownLatch latch) {
+		m_period = period;
+		m_latch = latch;
+	}
+	
+	public void run() {
+		switchPeriod(m_period)
+		m_latch.countDown();
+	}
+}
+
+// Has a promise attached, so when it finishes it triggers the promise
+class RCCountdownLatch {
+	void countDown() {
+		if (UPDATER.decrementAndGet() == 0) {
+			m_promise.setSuccess(null);
+		}
+	}
+}

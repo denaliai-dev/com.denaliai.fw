@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The status level here is for log4j startup, not our loggers -->
+<Configuration>
+</Configuration>

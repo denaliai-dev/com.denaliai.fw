@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.denaliai.fw</groupId>
+		<artifactId>fw-parent</artifactId>
+		<version>${revision}</version>
+		<relativePath>../fw-parent</relativePath>
+	</parent>
+	<artifactId>fw-http-client</artifactId>
+	<name>DenaliAI Framework HTTP Client</name>
+	<description>DenaliAI Framework HTTP Client</description>
+
+	<properties>
+		<main.basedir>${basedir}/..</main.basedir>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-http-server</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.asynchttpclient</groupId>
+			<artifactId>async-http-client</artifactId>
+			<version>2.5.4-denali</version>
+			<exclusions>
+				<exclusion>
+					<groupId>io.netty</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+	</dependencies>
+
+</project>

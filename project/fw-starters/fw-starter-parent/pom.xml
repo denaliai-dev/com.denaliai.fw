@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.denaliai.fw</groupId>
+		<artifactId>fw-dependencies</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../fw-dependencies</relativePath>
+	</parent>
+	
+	<artifactId>fw-starter-parent</artifactId>
+	<packaging>pom</packaging>
+	<name>DenaliAI Framework Parent for applications using starters</name>
+	<description>DenaliAI Framework Parent for applications using starters</description>
+
+	<properties>
+		<main.basedir>${basedir}/../..</main.basedir>
+		<java.version>1.8</java.version>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+		<maven.version>3.3.9</maven.version>
+	</properties>
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<configuration>
+						<source>${java.version}</source>
+						<target>${java.version}</target>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-jar-plugin</artifactId>
+					<configuration>
+						<archive>
+							<manifest>
+								<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+								<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+							</manifest>
+						</archive>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-source-plugin</artifactId>
+					<executions>
+						<execution>
+							<id>attach-sources</id>
+							<goals>
+								<goal>jar</goal>
+							</goals>
+						</execution>
+					</executions>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<configuration>
+						<!-- Sets the VM argument line used when unit tests are run. -->
+						<argLine>${surefireArgLine}</argLine>
+						<!-- Skips unit tests if the value of skip.unit.tests property is true -->
+						<skipTests>${skip.unit.tests}</skipTests>
+						<includes>
+							<include>**/*Tests.java</include>
+							<include>**/*Test.java</include>
+						</includes>
+						<excludes>
+							<exclude>**/Abstract*.java</exclude>
+						</excludes>
+						<reuseForks>false</reuseForks>
+						<trimStackTrace>false</trimStackTrace>
+						<environmentVariables>
+							<HOSTNAME>test-host</HOSTNAME>
+						</environmentVariables>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.jacoco</groupId>
+					<artifactId>jacoco-maven-plugin</artifactId>
+					<version>${maven-jacoco-plugin.version}</version>
+					<executions>
+						<execution>
+							<id>pre-unit-test</id>
+							<goals>
+								<goal>prepare-agent</goal>
+							</goals>
+							<configuration>
+								<!-- Sets the path to the file which contains the execution data. -->
+								<destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
+								<!-- Sets the name of the property containing the settings for JaCoCo 
+									runtime agent. -->
+								<propertyName>surefireArgLine</propertyName>
+							</configuration>
+						</execution>
+						<!-- Ensures that the code coverage report for unit tests is created 
+							after unit tests have been run. -->
+						<execution>
+							<id>post-unit-test</id>
+							<phase>test</phase>
+							<goals>
+								<goal>report</goal>
+							</goals>
+							<configuration>
+								<!-- Sets the path to the file which contains the execution data. -->
+								<dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
+								<!-- Sets the output directory for the code coverage report. -->
+								<outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
+							</configuration>
+						</execution>
+
+						<execution>
+							<id>check</id>
+							<phase>test</phase>
+							<goals>
+								<goal>check</goal>
+							</goals>
+							<configuration>
+								<dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
+								<rules />
+							</configuration>
+						</execution>
+
+					</executions>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+		<plugins>
+			<!-- Apply more sensible defaults for user projects -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<inherited>false</inherited>
+				<executions>
+					<execution>
+						<!-- Flatten and simplify our own POM for install/deploy -->
+						<id>flatten</id>
+						<phase>process-resources</phase>
+						<goals>
+							<goal>flatten</goal>
+						</goals>
+						<configuration>
+							<updatePomFile>true</updatePomFile>
+							<pomElements>
+								<parent>expand</parent>
+								<name>keep</name>
+								<description>keep</description>
+								<url>expand</url>
+								<properties>keep</properties>
+								<pluginManagement>keep</pluginManagement>
+								<dependencyManagement>keep</dependencyManagement>
+								<build>keep</build>
+							</pomElements>
+						</configuration>
+					</execution>
+					<execution>
+						<id>flatten-clean</id>
+						<phase>clean</phase>
+						<goals>
+							<goal>clean</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+			</plugin>
+ 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<version>1.5.16.RELEASE</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

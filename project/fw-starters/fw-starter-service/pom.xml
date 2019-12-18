@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.denaliai.fw</groupId>
+		<artifactId>fw-starters</artifactId>
+		<version>${revision}</version>
+	</parent>
+	
+	<artifactId>fw-starter-service</artifactId>
+	<packaging>pom</packaging>
+	<name>DenaliAI Framework starter dependency for java service applications</name>
+	<description>DenaliAI Framework starter dependency for java service applications</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+</project>

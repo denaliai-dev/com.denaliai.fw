@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The status level here is for log4j startup, not our loggers -->
+<Configuration status="INFO" shutdownHook="disable">
+    <Properties>
+        <Property name="Global-Appender-Pattern" value="[%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c{1} - %msg%n"/>
+        <!--        <Property name="Global-Appender-Pattern" value="[%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c - %msg%n"/>-->
+        <Property name="Global-Appender-Directory" value="${sys:com.denaliai.fw.log-dir:-logs}"/>
+        <Property name="Global-Appender-FilePrefix" value="${sys:com.denaliai.fw.log-file-prefix:-app}"/>
+        <Property name="Global-Appender-Filename" value="${Global-Appender-Directory}/${Global-Appender-FilePrefix}.log"/>
+        <Property name="Global-Appender-FilePattern" value="${Global-Appender-Directory}/${Global-Appender-FilePrefix}-%i.log"/>
+        <Property name="Global-Appender-MaxFileSize" value="5mb" />
+        <Property name="Global-Appender-MaxFileCount" value="10" />
+
+        <Property name="Root-Logger-Level" value="${sys:com.denaliai.logger-level-root:-INFO}"/>
+
+        <Property name="Framework-Logger-Level" value="${sys:com.denaliai.logger-level-fw:-INFO}"/>
+    </Properties>
+
+    <Appenders>
+        <RollingFile name="Global-Appender" fileName="${Global-Appender-Filename}" filePattern="${Global-Appender-FilePattern}" immediateFlush="true" >
+            <PatternLayout>
+                <pattern>${Global-Appender-Pattern}</pattern>
+            </PatternLayout>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="${Global-Appender-MaxFileSize}"/>
+            </Policies>
+            <DefaultRolloverStrategy max="${Global-Appender-MaxFileCount}"/>
+        </RollingFile>
+        <Console name="Console-Appender" target="SYSTEM_OUT">
+            <Filters>
+                <ConsoleDisableFilter />
+            </Filters>
+            <PatternLayout>
+                <pattern>${Global-Appender-Pattern}</pattern>
+            </PatternLayout>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="${Root-Logger-Level}">
+            <AppenderRef ref="Global-Appender"/>
+            <AppenderRef ref="Console-Appender"/>
+        </Root>
+        <Logger name="default.config"  level="INFO">
+            <AppenderRef ref="Global-Appender"/>
+            <AppenderRef ref="Console-Appender"/>
+        </Logger>
+
+        <Logger name="io.netty" level="${Framework-Logger-Level}"/>
+        <Logger name="org.asynchttpclient" level="${Framework-Logger-Level}"/>
+    </Loggers>
+</Configuration>

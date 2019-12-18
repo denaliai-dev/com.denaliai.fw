@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.denaliai.fw</groupId>
+		<artifactId>fw-parent</artifactId>
+		<version>${revision}</version>
+		<relativePath>../fw-parent</relativePath>
+	</parent>
+	<artifactId>fw-http-server</artifactId>
+	<name>DenaliAI Framework HTTP Server</name>
+	<description>DenaliAI Framework HTTP Server</description>
+
+	<properties>
+		<main.basedir>${basedir}/..</main.basedir>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-core</artifactId>
+		</dependency>
+	</dependencies>
+
+</project>

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.denaliai.fw</groupId>
+		<artifactId>fw-build</artifactId>
+		<version>${revision}</version>
+	</parent>
+	<groupId>com.denaliai.fw</groupId>
+	<artifactId>fw-project</artifactId>
+	<version>${revision}</version>
+	<packaging>pom</packaging>
+	<name>DenaliAI Framework Project</name>
+	<description>DenaliAI Framework Project</description>
+
+	<properties>
+		<main.basedir>${basedir}/..</main.basedir>
+	</properties>
+  
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<inherited>false</inherited>
+				<executions>
+					<execution>
+						<!-- Flatten and simplify our own POM for install/deploy -->
+						<id>flatten</id>
+						<phase>process-resources</phase>
+						<goals>
+							<goal>flatten</goal>
+						</goals>
+						<configuration>
+							<updatePomFile>true</updatePomFile>
+							<pomElements>
+								<parent>expand</parent>
+								<name>keep</name>
+								<description>keep</description>
+								<url>expand</url>
+								<properties>keep</properties>
+								<pluginManagement>keep</pluginManagement>
+								<dependencyManagement>keep</dependencyManagement>
+								<build>keep</build>
+							</pomElements>
+						</configuration>
+					</execution>
+					<execution>
+						<id>flatten-clean</id>
+						<phase>clean</phase>
+						<goals>
+							<goal>clean</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+  
+	<modules>
+		<module>fw-dependencies</module>
+		<module>fw-parent</module>
+		<module>fw-core</module>
+		<module>fw-json</module>
+		<module>fw-socket</module>
+		<module>fw-mongo</module>
+		<module>fw-http-server</module>
+		<module>fw-http-client</module>
+		<module>fw-starters</module>
+	</modules>
+
+</project>

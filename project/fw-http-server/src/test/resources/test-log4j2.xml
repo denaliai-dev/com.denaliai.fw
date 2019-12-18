@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The status level here is for log4j startup, not our loggers -->
+<Configuration>
+    <Appenders>
+        <Capture name="Capture-Appender">
+            <PatternLayout>
+                <pattern>${Global-Appender-Pattern}</pattern>
+            </PatternLayout>
+        </Capture>
+        <LevelCheck name="Level-Check-Appender">
+        </LevelCheck>
+    </Appenders>
+    <Loggers>
+        <Root level="${Root-Logger-Level}">
+            <AppenderRef ref="Level-Check-Appender"/>
+            <AppenderRef ref="Capture-Appender"/>
+        </Root>
+        <Logger name="default.config"  level="INFO">
+            <AppenderRef ref="Level-Check-Appender"/>
+            <AppenderRef ref="Capture-Appender"/>
+        </Logger>
+        <!--<Logger name="com.denaliai.fw.http"  level="TRACE"/>-->
+    </Loggers>
+</Configuration>
