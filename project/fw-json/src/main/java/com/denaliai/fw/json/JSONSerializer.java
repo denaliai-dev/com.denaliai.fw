@@ -236,6 +236,9 @@ public abstract class JSONSerializer {
 		public StringNode(String value) {
 			m_value = value;
 		}
+		public StringNode(long value) {
+			m_value = Long.toString(value);
+		}
 
 		@Override
 		public boolean isString() {
