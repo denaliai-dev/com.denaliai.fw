@@ -27,6 +27,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class HttpServer {
 	private static final int SERVER_BACKLOG = Config.getFWInt("http.HttpServer.defaultServerSocketBacklog", 128);
 	private static final int MAX_CONTENT_SIZE = Config.getFWInt("http.HttpServer.maxContentSize", 512*1024);
+	private static final String ACCESS_CONTROL_ALLOW_ORIGIN = Config.getFWString("http.HttpServer.accessControlAllowOrigin", null);
+	private static final String ACCESS_CONTROL_ALLOW_METHODS = Config.getFWString("http.HttpServer.accessControlAllowMethods", null);
+	private static final String ACCESS_CONTROL_ALLOW_HEADERS = Config.getFWString("http.HttpServer.accessControlAllowHeaders", null);
 	private static final AttributeKey<Connection> CONNECTION = AttributeKey.newInstance("ConnectionClass");
 
 	private final CounterAndRateMetric m_newConnections;
@@ -263,7 +266,10 @@ public final class HttpServer {
 			}
 			pipeline.addLast("read-timeout", new ReadTimeoutHandler(m_readTimeoutInMS, TimeUnit.MILLISECONDS));
 			pipeline.addLast("codec", new HttpServerCodec(/*4096, 8192, 8192*/)); // TODO: make these configurable
-			pipeline.addLast("compressor", new HttpContentCompressor());
+			if (!LOG.isTraceEnabled()) {
+				// Need to prevent compressing so we can log the uncompressed buffers
+				pipeline.addLast("compressor", new HttpContentCompressor());
+			}
 			pipeline.addLast("keepAlive", new HttpServerKeepAliveHandler());
 			pipeline.addLast("aggregator", new HttpObjectAggregator(MAX_CONTENT_SIZE, true));
 			pipeline.addLast(m_connectionMsgHandler);
@@ -523,6 +529,7 @@ public final class HttpServer {
 		private ChannelHandlerContext m_context;
 		private MetricsEngine.IMetricTimer m_requestTimer;
 		private HttpVersion m_httpRequestProtocolVersion;
+		private HttpMethod m_httpRequestMethod;
 		private FullHttpRequest m_httpRequest;
 		private Map<String,String> m_responseHeaders;
 
@@ -562,7 +569,7 @@ public final class HttpServer {
 		*/
 		@Override
 		public String requestMethod() {
-			return m_httpRequest.method().name();
+			return m_httpRequestMethod.name();
 		}
 
 		@Override
@@ -602,6 +609,19 @@ public final class HttpServer {
 			DefaultFullHttpResponse response = new DefaultFullHttpResponse(m_httpRequestProtocolVersion, httpResponseStatus, data);
 			HttpHeaders headers = response.headers();
 			headers.add(HttpHeaderNames.CONTENT_LENGTH, data.readableBytes());
+
+			String secFetchMode = m_httpRequest.headers().get("sec-fetch-mode");
+			if ("cors".equals(secFetchMode)) {
+				if (ACCESS_CONTROL_ALLOW_ORIGIN != null) {
+					headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_ALLOW_ORIGIN);
+				}
+				if (ACCESS_CONTROL_ALLOW_METHODS != null) {
+					headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_METHODS);
+				}
+				if (ACCESS_CONTROL_ALLOW_HEADERS != null) {
+					headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_HEADERS);
+				}
+			}
 			if (m_responseHeaders != null) {
 				for(Map.Entry<String,String> e : m_responseHeaders.entrySet()) {
 					headers.add(e.getKey(), e.getValue());
@@ -620,6 +640,7 @@ public final class HttpServer {
 		private void startRequest(FullHttpRequest request) {
 			m_httpRequest = request;
 			m_httpRequestProtocolVersion = m_httpRequest.protocolVersion();
+			m_httpRequestMethod = m_httpRequest.method();
 			m_requestTimer = MetricsEngine.startTimer();
 		}
 
