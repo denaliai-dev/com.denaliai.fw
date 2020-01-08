@@ -11,9 +11,9 @@
         <Property name="Global-Appender-MaxFileSize" value="5mb" />
         <Property name="Global-Appender-MaxFileCount" value="10" />
 
-        <Property name="Root-Logger-Level" value="${sys:com.denaliai.logger-level-root:-INFO}"/>
+        <Property name="Root-Logger-Level" value="${sys:com.denaliai.fw.logger-level-root:-INFO}"/>
 
-        <Property name="Framework-Logger-Level" value="${sys:com.denaliai.logger-level-fw:-INFO}"/>
+        <Property name="Framework-Logger-Level" value="${sys:com.denaliai.fw.logger-level-fw:-INFO}"/>
     </Properties>
 
     <Appenders>

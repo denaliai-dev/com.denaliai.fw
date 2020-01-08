@@ -2,14 +2,21 @@ package com.denaliai.fw.utility.concurrent;
 
 
 import com.denaliai.fw.Application;
+import io.netty.channel.EventLoopGroup;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class PerpetualWork implements Runnable
 {
 	private final AtomicLong m_currentWorkTick = new AtomicLong();
+	private final EventLoopGroup m_eventGroup;
 
 	public PerpetualWork() {
+		m_eventGroup = Application.getTaskPool();
+	}
+
+	public PerpetualWork(EventLoopGroup eventGroup) {
+		m_eventGroup = eventGroup;
 	}
 
 	/*
