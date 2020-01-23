@@ -132,6 +132,16 @@ public final class Config {
 		}
 	}
 
+	public static void addDefaultValue(String sourceName, String key, String value) {
+		synchronized(Config.class) {
+			if (m_settings.get().containsKey(key)) {
+				// Already set value, do not add the default
+				return;
+			}
+			overrideValue(sourceName, key, value);
+		}
+	}
+
 	static Setting createSetting(String sourceName, String key, String value) {
 		return new Setting(key, value, sourceName);
 	}
