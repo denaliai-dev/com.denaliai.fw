@@ -110,37 +110,6 @@ public class Application {
 		return m_taskPool.next().newFailedFuture(cause);
 	}
 
-	static void initLogging() {
-		if (m_terminateRun) {
-			LogManager.getLogger(Application.class).error("Attempt to re-initialize a terminated application");
-			fatalExit();
-		}
-		Config.setConfigLogger(new Log4jConfigLogger());
-		for(String configKey : Config.keys()) {
-			if (configKey.startsWith("logger.")) {
-				final String loggerName = configKey.substring(7);
-				final String levelString = Config.getString(configKey, null);
-				final Level level;
-				try {
-					level = Level.getLevel(levelString);
-				} catch(Exception ex) {
-					LogManager.getLogger(Application.class).error("Could not parse logger level '{}' for '{}'", levelString, configKey, ex);
-					continue;
-				}
-				if (level == null) {
-					LogManager.getLogger(Application.class).error("Could not parse logger level '{}' for '{}'", levelString, configKey);
-
-				} else if (loggerName.equals("root")) {
-					Configurator.setRootLevel(level);
-
-				} else {
-					Configurator.setLevel(loggerName, level);
-				}
-			}
-		}
-	}
-
-
 	public static void run() {
 		final Logger LOG = LogManager.getLogger(Application.class);
 		final String ver = Application.class.getPackage().getImplementationVersion();
