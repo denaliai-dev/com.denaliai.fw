@@ -16,17 +16,7 @@ class DataLogHandler extends ChannelDuplexHandler {
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		if (msg instanceof ByteBuf) {
-			StringBuilder sb = new StringBuilder();
-			ByteBuf buf = (ByteBuf)msg;
-			if (buf.readableBytes() <= 1024) {
-				ByteBufUtil.appendPrettyHexDump(sb, buf);
-			} else {
-				ByteBufUtil.appendPrettyHexDump(sb, buf, 0, 512);
-				sb.append("...truncated...\n");
-				int endStart = buf.readableBytes()-1-512;
-				ByteBufUtil.appendPrettyHexDump(sb, buf, endStart, 512);
-			}
-			LOG.trace("HTTP inbound data buffer\n{}", sb);
+			LOG.trace("HTTP inbound data buffer\n{}", printBuffer((ByteBuf)msg));
 		}
 		super.channelRead(ctx, msg);
 	}
@@ -34,11 +24,21 @@ class DataLogHandler extends ChannelDuplexHandler {
 	@Override
 	public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
 		if (msg instanceof ByteBuf) {
-			StringBuilder sb = new StringBuilder();
-			ByteBufUtil.appendPrettyHexDump(sb, (ByteBuf)msg);
-			LOG.trace("HTTP outbound data buffer\n{}", sb);
+			LOG.trace("HTTP outbound data buffer\n{}", printBuffer((ByteBuf)msg));
 		}
 		super.write(ctx, msg, promise);
 	}
 
+	private static StringBuilder printBuffer(ByteBuf buf) {
+		StringBuilder sb = new StringBuilder();
+		if (buf.readableBytes() <= 1024) {
+			ByteBufUtil.appendPrettyHexDump(sb, buf);
+		} else {
+			ByteBufUtil.appendPrettyHexDump(sb, buf, 0, 512);
+			sb.append("\n...truncated...\n");
+			int endStart = buf.readableBytes()-1-512;
+			ByteBufUtil.appendPrettyHexDump(sb, buf, endStart, 512);
+		}
+		return sb;
+	}
 }
