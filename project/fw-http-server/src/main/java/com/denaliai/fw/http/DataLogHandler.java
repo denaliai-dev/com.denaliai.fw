@@ -17,7 +17,15 @@ class DataLogHandler extends ChannelDuplexHandler {
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		if (msg instanceof ByteBuf) {
 			StringBuilder sb = new StringBuilder();
-			ByteBufUtil.appendPrettyHexDump(sb, (ByteBuf)msg);
+			ByteBuf buf = (ByteBuf)msg;
+			if (buf.readableBytes() <= 1024) {
+				ByteBufUtil.appendPrettyHexDump(sb, buf);
+			} else {
+				ByteBufUtil.appendPrettyHexDump(sb, buf, 0, 512);
+				sb.append("...truncated...\n");
+				int endStart = buf.readableBytes()-1-512;
+				ByteBufUtil.appendPrettyHexDump(sb, buf, endStart, 512);
+			}
 			LOG.trace("HTTP inbound data buffer\n{}", sb);
 		}
 		super.channelRead(ctx, msg);
