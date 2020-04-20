@@ -1,7 +1,6 @@
 package com.denaliai.fw;
 
 import com.denaliai.fw.config.Config;
-import com.denaliai.fw.config.Log4jConfigLogger;
 import com.denaliai.fw.metrics.CounterMetric;
 import com.denaliai.fw.metrics.MetricsEngine;
 import com.denaliai.fw.utility.concurrent.DenaliEventLoopGroup;
@@ -13,7 +12,6 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
-import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;

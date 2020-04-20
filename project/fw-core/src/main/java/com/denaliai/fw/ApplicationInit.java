@@ -12,7 +12,6 @@ import org.apache.logging.log4j.core.config.Configurator;
 public class ApplicationInit {
 
 	static void initLogging() {
-		//ConfigurationFactory.setConfigurationFactory(new FWConfigFactory());
 		LoggerContext.getContext(false).start();
 
 		Config.setConfigLogger(new Log4jConfigLogger());
