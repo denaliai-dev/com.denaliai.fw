@@ -19,6 +19,10 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-base-api</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>io.netty</groupId>
 			<artifactId>netty-all</artifactId>
 		</dependency>

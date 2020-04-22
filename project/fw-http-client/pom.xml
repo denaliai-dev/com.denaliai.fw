@@ -24,6 +24,11 @@
 		</dependency>
 		<dependency>
 			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-core-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.denaliai.fw</groupId>
 			<artifactId>fw-http-server</artifactId>
 			<scope>test</scope>
 		</dependency>

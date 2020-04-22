@@ -11,11 +11,12 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.netty.util.concurrent.ScheduledFuture;
 import io.netty.util.internal.PlatformDependent;
-import org.apache.logging.log4j.LogManager;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -203,7 +204,7 @@ public final class MetricsEngine {
 		if (!data.add(index, value)) {
 			data = MetricsEngine.newDataInstance();
 			if (!data.add(index, value)) {
-				LogManager.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
 			}
 		}
 	}
@@ -213,7 +214,7 @@ public final class MetricsEngine {
 		if (!data.increment(index)) {
 			data = MetricsEngine.newDataInstance();
 			if (!data.increment(index)) {
-				LogManager.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
 			}
 		}
 	}
@@ -223,7 +224,7 @@ public final class MetricsEngine {
 		if (!data.decrement(index)) {
 			data = MetricsEngine.newDataInstance();
 			if (!data.decrement(index)) {
-				LogManager.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
 			}
 		}
 	}
@@ -234,7 +235,7 @@ public final class MetricsEngine {
 		if (!data.record(m, ti)) {
 			data = MetricsEngine.newDataInstance();
 			if (!data.record(m, ti)) {
-				LogManager.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
 			}
 		}
 	}
@@ -290,13 +291,21 @@ public final class MetricsEngine {
 		private long[] m_snapshotData;
 		private List<MetricBase> m_snapshotMetrics;
 
+		@Override
+		public final void requestMoreWork() {
+			try {
+				super.requestMoreWork();
+			} catch(RejectedExecutionException ex) {
+				// This can happen during shutdown and can be ignored
+			}
+		}
 
 		@Override
 		protected void _doWork() {
 			try {
 				internal_doWork();
 			} catch(Exception ex) {
-				LogManager.getLogger(SnapshotWorker.class).error("Unhandled exception in snapshot worker", ex);
+				LoggerFactory.getLogger(SnapshotWorker.class).error("Unhandled exception in snapshot worker", ex);
 			}
 		}
 
@@ -378,13 +387,13 @@ public final class MetricsEngine {
 				try {
 					m.report(m_snapshotData, snapshotDurationMS, m_snapshotConsumer);
 				} catch(Exception ex) {
-					LogManager.getLogger(SnapshotWorker.class).error("Unhandled exception in report", ex);
+					LoggerFactory.getLogger(SnapshotWorker.class).error("Unhandled exception in report", ex);
 				}
 			}
 			try {
 				m_snapshotConsumer.done();
 			} catch(Exception ex) {
-				LogManager.getLogger(SnapshotWorker.class).error("Unhandled exception in consumer.done()", ex);
+				LoggerFactory.getLogger(SnapshotWorker.class).error("Unhandled exception in consumer.done()", ex);
 			}
 /*
 				We need to write the name and processed data somewhere
@@ -482,14 +491,14 @@ public final class MetricsEngine {
 			try {
 				m_out = new RandomAccessFile(m_tmp, "rw");
 			} catch(Exception ex) {
-				LogManager.getLogger(SnapshotFileWriter.class).error("Unhandled exception creating {}", m_tmp.getAbsolutePath(), ex);
+				LoggerFactory.getLogger(SnapshotFileWriter.class).error("Unhandled exception creating {}", m_tmp.getAbsolutePath(), ex);
 				return;
 			}
 			try {
 				m_out.getChannel().write(m_outputBuf.nioBuffer());
 				m_out.getChannel().force(true);
 			} catch (Exception ex) {
-				LogManager.getLogger(SnapshotFileWriter.class).error("Exception writing and flushing {}", m_tmp.getAbsolutePath(), ex);
+				LoggerFactory.getLogger(SnapshotFileWriter.class).error("Exception writing and flushing {}", m_tmp.getAbsolutePath(), ex);
 				try {
 					m_out.close();
 				} catch (IOException e) {
@@ -500,12 +509,12 @@ public final class MetricsEngine {
 			try {
 				m_out.close();
 			} catch (IOException ex) {
-				LogManager.getLogger(SnapshotFileWriter.class).error("Exception closing {}", m_tmp.getAbsolutePath(), ex);
+				LoggerFactory.getLogger(SnapshotFileWriter.class).error("Exception closing {}", m_tmp.getAbsolutePath(), ex);
 				return;
 			}
 			File metricsFile = new File(METRICS_PATH + "/" + m_snapshotStartMS + ".metrics");
 			if (!m_tmp.renameTo(metricsFile)) {
-				LogManager.getLogger(SnapshotFileWriter.class).error("Failed renaming '{}' to '{}'", m_tmp.getAbsolutePath(), metricsFile.getAbsolutePath());
+				LoggerFactory.getLogger(SnapshotFileWriter.class).error("Failed renaming '{}' to '{}'", m_tmp.getAbsolutePath(), metricsFile.getAbsolutePath());
 				m_tmp.delete();
 			}
 		}

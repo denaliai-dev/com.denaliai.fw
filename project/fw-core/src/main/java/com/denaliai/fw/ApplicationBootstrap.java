@@ -1,10 +1,7 @@
 package com.denaliai.fw;
 
 import com.denaliai.fw.config.Config;
-import org.apache.logging.log4j.core.config.plugins.util.PluginManager;
-
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import org.slf4j.LoggerFactory;
 
 public class ApplicationBootstrap {
 	// This is here to force the loading of the Config system before running any methods.  During the config load
@@ -13,37 +10,19 @@ public class ApplicationBootstrap {
 	private static final Boolean FORCE_CONFIG = Config.getFWBoolean("not-found", null);
 
 	public static void bootstrap(String[] args) {
-		System.out.println("[     ] " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()) + " ApplicationBootstrap Java " + System.getProperty("java.version"));
-
-		System.setProperty("log4j2.disableJmx", "true");
-		System.setProperty("log4j.configurationFile", "core-log4j2.xml");
-		PluginManager.addPackage("com.denaliai.fw.log4j");
+		ApplicationRun.bootstrapLog("ApplicationBootstrap Java " + System.getProperty("java.version"));
+		ApplicationRun.loadLoggingImplementation();
+		if (ApplicationRun.registeredLoggingImpl() != null) {
+			ApplicationRun.registeredLoggingImpl().bootstrap(args);
+		}
 		processCommandLine(args);
-		ApplicationInit.initLogging();
-		System.out.println("[     ] " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()) + " bootstrap done");
-	}
-
-	public static void bootstrap(String applicationLog4jXMLfilename, String[] args) {
-		System.out.println("[     ] " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()) + " ApplicationBootstrap Java " + System.getProperty("java.version"));
-
-		System.setProperty("log4j2.disableJmx", "true");
-		System.setProperty("log4j.configurationFile", "core-log4j2.xml," + applicationLog4jXMLfilename);
-		PluginManager.addPackage("com.denaliai.fw.log4j");
-		processCommandLine(args);
-		ApplicationInit.initLogging();
-		System.out.println("[     ] " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()) + " bootstrap done");
-	}
-
-	public static void bootstrapUnitTest(String applicationLog4jXMLfilename) {
-		System.out.println("[     ] " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()) + " ApplicationBootstrap Java " + System.getProperty("java.version"));
-		System.setProperty("com.denaliai.logger-level-root", System.getProperty("com.denaliai.logger-level-root", "DEBUG"));
-
-		System.setProperty("log4j2.disableJmx", "true");
-		System.setProperty("log4j.configurationFile", "core-log4j2.xml," + applicationLog4jXMLfilename);
-		PluginManager.addPackage("com.denaliai.fw.log4j");
-		processCommandLine(null);
-		ApplicationInit.initLogging();
-		System.out.println("[     ] " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()) + " bootstrap done");
+		ApplicationRun.bootstrapLog("bootstrap done");
+		if (ApplicationRun.isTerminating()) {
+			ApplicationRun.bootstrapLog("ERROR: Attempt to re-initialize a terminated application");
+			ApplicationRun.fatalExit();
+			// Won't get here unless certain options are set to prevent JVM halt
+			throw new RuntimeException("Attempt to re-initialize a terminated application");
+		}
 	}
 
 	private static void processCommandLine(String[] args) {

@@ -15,6 +15,10 @@
 	<dependencies>
 		<dependency>
 			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-base-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.denaliai.fw</groupId>
 			<artifactId>fw-core</artifactId>
 		</dependency>
 		<dependency>

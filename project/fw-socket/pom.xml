@@ -22,6 +22,11 @@
 			<groupId>com.denaliai.fw</groupId>
 			<artifactId>fw-core</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.denaliai.fw</groupId>
+			<artifactId>fw-core-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 </project>

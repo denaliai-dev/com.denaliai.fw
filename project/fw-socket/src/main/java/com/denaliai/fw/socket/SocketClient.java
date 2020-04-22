@@ -14,8 +14,8 @@ import io.netty.util.*;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.netty.util.internal.PlatformDependent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
@@ -49,7 +49,7 @@ public class SocketClient {
 	private volatile ClientState m_clientState = ClientState.Offline;
 
 	private SocketClient(SocketClientBuilder builder) {
-		LOG = LogManager.getLogger(SocketServer.class.getCanonicalName() + "." + builder.m_loggerNameSuffix);
+		LOG = LoggerFactory.getLogger(SocketServer.class.getCanonicalName() + "." + builder.m_loggerNameSuffix);
 		m_connectHandler = (builder.m_connectHandler != null) ? builder.m_connectHandler : new NullHandler(LOG);
 		m_disconnectHandler = (builder.m_disconnectHandler != null) ? builder.m_disconnectHandler : new NullHandler(LOG);
 		m_failureHandler = (builder.m_failureHandler != null) ? builder.m_failureHandler : new NullHandler(LOG);
@@ -512,7 +512,7 @@ public class SocketClient {
 		private final Logger LOG;
 
 		NullHandler(Logger parentLogger) {
-			LOG = LogManager.getLogger(parentLogger.getName() + ".NullHandler");
+			LOG = LoggerFactory.getLogger(parentLogger.getName() + ".NullHandler");
 		}
 
 		@Override

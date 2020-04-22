@@ -5,7 +5,7 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
 
 @ChannelHandler.Sharable
 class DataLogHandler extends ChannelInboundHandlerAdapter {

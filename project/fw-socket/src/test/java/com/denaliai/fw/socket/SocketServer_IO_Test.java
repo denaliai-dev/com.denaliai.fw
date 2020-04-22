@@ -1,8 +1,7 @@
 package com.denaliai.fw.socket;
 
 import com.denaliai.fw.Application;
-import com.denaliai.fw.log4j.TestCaptureAppender;
-import com.denaliai.fw.utility.http.MinimalHTTPRequest;
+import com.denaliai.fw.log4j2.TestCaptureAppender;
 import com.denaliai.fw.utility.socket.MinimalRawSocketExchange;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;

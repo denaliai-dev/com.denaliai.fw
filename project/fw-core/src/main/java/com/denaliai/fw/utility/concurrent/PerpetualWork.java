@@ -24,7 +24,7 @@ public abstract class PerpetualWork implements Runnable
 	 * Support multiple threads calling this method
 	 *
 	 */
-	public final void requestMoreWork()
+	public void requestMoreWork()
 	{
 		final long currentRequestTick = m_currentWorkTick.get();
 

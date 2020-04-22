@@ -68,7 +68,11 @@
 	<modules>
 		<module>fw-dependencies</module>
 		<module>fw-parent</module>
+		<module>fw-base-api</module>
+		<module>fw-logging-impl-log4j2</module>
+		<module>fw-logging-impl-jul</module>
 		<module>fw-core</module>
+		<module>fw-core-test</module>
 		<module>fw-json</module>
 		<module>fw-socket</module>
 		<module>fw-mongo</module>

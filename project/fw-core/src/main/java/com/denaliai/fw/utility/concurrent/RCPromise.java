@@ -5,8 +5,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.util.*;
 import io.netty.util.concurrent.FastThreadLocal;
 import io.netty.util.internal.PlatformDependent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 public class RCPromise<T> extends AbstractReferenceCounted implements RCFuture<T> {
 	private static final int MAX_NOTIFY_DEPTH = Integer.parseInt(System.getProperty("com.bk.db.concurrent.RCPromise.max-notify-depth", "8"));
-	private static final Logger LOG = LogManager.getLogger(RCPromise.class);
+	private static final Logger LOG = LoggerFactory.getLogger(RCPromise.class);
 	private static final ResourceLeakDetector<RCPromise> PROMISE_LEAK_DETECT = ResourceLeakDetectorFactory.instance().newResourceLeakDetector(RCPromise.class, 1);
 	private static final Recycler<RCPromise> PROMISE_RECYCLER = new Recycler<RCPromise>() {
 		@Override

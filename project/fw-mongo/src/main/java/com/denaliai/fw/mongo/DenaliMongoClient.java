@@ -4,17 +4,16 @@ import com.denaliai.fw.Application;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.ServerAddress;
 import com.mongodb.connection.netty.NettyStreamFactoryFactory;
-import com.mongodb.event.*;
 import com.mongodb.reactivestreams.client.MongoClient;
 import com.mongodb.reactivestreams.client.MongoClients;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class DenaliMongoClient {
-	private static final Logger LOG = LogManager.getLogger(DenaliMongoClient.class);
+	private static final Logger LOG = LoggerFactory.getLogger(DenaliMongoClient.class);
 	private final List<ServerAddress> m_clusterHosts;
 	private final IMongoClientConnect m_connectHandler;
 	private final IMongoClientDisconnect m_disconnectHandler;

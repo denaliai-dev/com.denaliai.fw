@@ -11,16 +11,16 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.netty.util.internal.PlatformDependent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.asynchttpclient.*;
 import org.asynchttpclient.netty.LazyResponseBodyPart;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class HttpClient {
-	private static final Logger LOG = LogManager.getLogger(HttpClient.class);
+	private static final Logger LOG = LoggerFactory.getLogger(HttpClient.class);
 
 	private static final Integer Config_MaxConnections = Config.getFWInt("http.HttpClient.maxConnections", null);
 	private static final Integer Config_MaxConnectionsPerHost = Config.getFWInt("http.HttpClient.maxConnectionsPerHost", null);
@@ -78,7 +78,7 @@ public class HttpClient {
 	}
 
 	private final class Worker extends PerpetualWork {
-		private final Logger LOG = LogManager.getLogger(Worker.class);
+		private final Logger LOG = LoggerFactory.getLogger(Worker.class);
 		private AsyncHttpClient m_client;
 		private boolean m_started;
 		private boolean m_stopped;

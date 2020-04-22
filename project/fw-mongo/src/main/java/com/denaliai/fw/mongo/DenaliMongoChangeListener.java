@@ -1,7 +1,6 @@
 package com.denaliai.fw.mongo;
 
 import com.denaliai.fw.Application;
-import com.denaliai.fw.utility.ByteBufUtils;
 import com.denaliai.fw.utility.concurrent.PerpetualWork;
 import com.denaliai.fw.utility.io.FileUtils;
 import com.mongodb.client.model.changestream.ChangeStreamDocument;
@@ -12,8 +11,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.netty.util.internal.PlatformDependent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
 import org.bson.BsonTimestamp;
@@ -21,6 +18,8 @@ import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,7 +29,7 @@ import java.util.List;
 import java.util.Queue;
 
 public class DenaliMongoChangeListener {
-	private static final Logger LOG = LogManager.getLogger(DenaliMongoChangeListener.class);
+	private static final Logger LOG = LoggerFactory.getLogger(DenaliMongoChangeListener.class);
 
 	private final Queue<Object> m_docQueue = PlatformDependent.newSpscQueue();
 	private final int m_batchSize;
@@ -228,7 +227,7 @@ public class DenaliMongoChangeListener {
 			try {
 				m_docQueue.add(document);
 			} catch(Throwable t) {
-				LOG.fatal("DenaliMongoChangeListener.onNext()", t);
+				LOG.error("DenaliMongoChangeListener.onNext()", t);
 			}
 			m_worker.requestMoreWork();
 			// For some reason onComplete isn't being called, so we will do the request here too
@@ -377,7 +376,7 @@ public class DenaliMongoChangeListener {
 			try {
 				m_out = new RandomAccessFile(m_lastDocumentFileTmp, "rw");
 			} catch(Exception ex) {
-				LogManager.getLogger(TokenFileWriter.class).error("Unhandled exception creating {}", m_lastDocumentFileTmp.getAbsolutePath(), ex);
+				LoggerFactory.getLogger(TokenFileWriter.class).error("Unhandled exception creating {}", m_lastDocumentFileTmp.getAbsolutePath(), ex);
 				m_completed.setFailure(ex);
 				return;
 			}
@@ -385,7 +384,7 @@ public class DenaliMongoChangeListener {
 				m_out.getChannel().write(m_buffer.nioBuffer());
 				m_out.getChannel().force(true);
 			} catch (Exception ex) {
-				LogManager.getLogger(TokenFileWriter.class).error("Exception writing and flushing {}", m_lastDocumentFileTmp.getAbsolutePath(), ex);
+				LoggerFactory.getLogger(TokenFileWriter.class).error("Exception writing and flushing {}", m_lastDocumentFileTmp.getAbsolutePath(), ex);
 				try {
 					m_out.close();
 				} catch (IOException e) {
@@ -397,18 +396,18 @@ public class DenaliMongoChangeListener {
 			try {
 				m_out.close();
 			} catch (IOException ex) {
-				LogManager.getLogger(TokenFileWriter.class).error("Exception closing {}", m_lastDocumentFileTmp.getAbsolutePath(), ex);
+				LoggerFactory.getLogger(TokenFileWriter.class).error("Exception closing {}", m_lastDocumentFileTmp.getAbsolutePath(), ex);
 				m_completed.setFailure(ex);
 				return;
 			}
 			m_lastDocumentFileOld.delete();
 			if (m_lastDocumentFile.exists() && !m_lastDocumentFile.renameTo(m_lastDocumentFileOld)) {
-				LogManager.getLogger(TokenFileWriter.class).error("Failed renaming '{}' to '{}'", m_lastDocumentFile.getAbsolutePath(), m_lastDocumentFileOld.getAbsolutePath());
+				LoggerFactory.getLogger(TokenFileWriter.class).error("Failed renaming '{}' to '{}'", m_lastDocumentFile.getAbsolutePath(), m_lastDocumentFileOld.getAbsolutePath());
 				m_completed.setFailure(new RuntimeException());
 				return;
 			}
 			if (!m_lastDocumentFileTmp.renameTo(m_lastDocumentFile)) {
-				LogManager.getLogger(TokenFileWriter.class).error("Failed renaming '{}' to '{}'", m_lastDocumentFileTmp.getAbsolutePath(), m_lastDocumentFile.getAbsolutePath());
+				LoggerFactory.getLogger(TokenFileWriter.class).error("Failed renaming '{}' to '{}'", m_lastDocumentFileTmp.getAbsolutePath(), m_lastDocumentFile.getAbsolutePath());
 				m_completed.setFailure(new RuntimeException());
 				return;
 			}

@@ -12,8 +12,8 @@ import java.nio.charset.Charset;
 
 import javax.net.SocketFactory;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MinimalHTTPRequest {
 
@@ -24,7 +24,7 @@ public class MinimalHTTPRequest {
 	// TODO need to add POST
 
 	public static String get(String urlString) {
-		final Logger LOG = LogManager.getLogger(MinimalHTTPRequest.class.getName());
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName());
 		final URL url;
 		try {
 			url = new URL(urlString);
@@ -49,7 +49,7 @@ public class MinimalHTTPRequest {
 	}
 
 	public static String get(String host, int port, String file) {
-		final Logger LOG = LogManager.getLogger(MinimalHTTPRequest.class.getName() + "." + host);
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName() + "." + host);
 		final SocketFactory factory = SocketFactory.getDefault();
 		return get(factory, host, port, file, 15000, LOG);
 	}

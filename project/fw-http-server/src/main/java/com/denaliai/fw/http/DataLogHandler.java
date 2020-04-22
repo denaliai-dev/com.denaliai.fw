@@ -3,7 +3,7 @@ package com.denaliai.fw.http;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.*;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
 
 @ChannelHandler.Sharable
 class DataLogHandler extends ChannelDuplexHandler {

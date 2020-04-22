@@ -1,6 +1,7 @@
 package com.denaliai.fw;
 
 import com.denaliai.fw.config.Config;
+import com.denaliai.fw.logging.LoggingImplRegistration;
 import com.denaliai.fw.metrics.CounterMetric;
 import com.denaliai.fw.metrics.MetricsEngine;
 import com.denaliai.fw.utility.concurrent.DenaliEventLoopGroup;
@@ -12,10 +13,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.config.Configurator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
@@ -30,9 +29,9 @@ public class Application {
 	private static final EventLoopGroup m_taskPool;
 	private static boolean m_haltOnFatalExit = true;
 	private static IShutdownHandler m_userShutdownHandler;
-	private static volatile boolean m_terminateRun;
 
 	static {
+		ApplicationRun.registerFatalExitHandler(() -> Application.fatalExit());
 		m_ioPool = new NioEventLoopGroup(Config.getFWInt("core.Application.ioPoolCount", 2));
 		int taskPoolSize = Config.getFWInt("core.Application.taskPoolCount", -1);
 		if (taskPoolSize <= 0) {
@@ -44,7 +43,9 @@ public class Application {
 
 	public static void fatalExit() {
 		if (m_haltOnFatalExit) {
-			Configurator.shutdown(LoggerContext.getContext(), 60, TimeUnit.SECONDS); // TODO pull this from config
+			if (LoggingImplRegistration.registeredLoggingImpl() != null) {
+				LoggingImplRegistration.registeredLoggingImpl().shutdown();
+			}
 			Runtime.getRuntime().halt(1);
 		}
 	}
@@ -109,7 +110,7 @@ public class Application {
 	}
 
 	public static void run() {
-		final Logger LOG = LogManager.getLogger(Application.class);
+		final Logger LOG = LoggerFactory.getLogger(Application.class);
 		final String ver = Application.class.getPackage().getImplementationVersion();
 		if (ver != null) {
 			LOG.info("Starting ({})", ver);
@@ -121,38 +122,57 @@ public class Application {
 	}
 
 	public static boolean isTerminating() {
-		return m_terminateRun;
+		return ApplicationRun.isTerminating();
 	}
 
 	public static void terminate() {
-		new Thread(() -> terminate0()).start();
+		Thread t = new Thread(() -> {
+			try {
+				terminate0();
+			} catch (Throwable ex) {
+				ex.printStackTrace(System.err);
+			}
+			System.out.println("terminate() done");
+		}, "terminate()");
+		t.setDaemon(false);
+		t.start();
+	}
+
+	public static void terminateAndWait() {
+		try {
+			terminate0();
+		} catch (Throwable ex) {
+			ex.printStackTrace(System.err);
+		}
 	}
 
 	private static void terminate0() {
-		synchronized(Application.class) {
-			if (m_terminateRun) {
-				return;
-			}
-			m_terminateRun = true;
+		if (!ApplicationRun.indicateTermination()) {
+			return;
 		}
 
 		m_applicationStop.increment();
 		// User needs to snapshot in the shutdown handler if they want this counter
-		final Logger LOG = LogManager.getLogger(Application.class);
+		final Logger LOG = LoggerFactory.getLogger(Application.class);
 		if(m_userShutdownHandler != null) {
 			LOG.info("Waiting on shutdown handler");
 			Promise<Void> shutdownDone = getTaskPool().next().newPromise();
-			m_userShutdownHandler.shutdown(shutdownDone);
 			try {
-				shutdownDone.await();
-			} catch (InterruptedException e) {
+				m_userShutdownHandler.shutdown(shutdownDone);
+				try {
+					shutdownDone.await();
+				} catch (InterruptedException e) {
+				}
+			} catch (Exception ex) {
+				LOG.error("Exception in user shutdown handler", ex);
 			}
+			LOG.debug("Shutdown handler done");
 		}
 		finalTerminate();
 	}
 
 	private static void finalTerminate() {
-		final Logger LOG = LogManager.getLogger(Application.class);
+		final Logger LOG = LoggerFactory.getLogger(Application.class);
 
 		// Shut down thread pools
 		LOG.debug("Waiting for io pool shutdown");
@@ -160,11 +180,16 @@ public class Application {
 		LOG.debug("Waiting for task pool shutdown");
 		m_taskPool.shutdownGracefully(SHUTDOWN_QUIET_PERIOD, SHUTDOWN_MAX_WAIT, TimeUnit.MILLISECONDS).awaitUninterruptibly();
 		LOG.info("End of shutdown hook");
-		Configurator.shutdown(LoggerContext.getContext(), 60, TimeUnit.SECONDS); // TODO pull this from config
+		if (LoggingImplRegistration.registeredLoggingImpl() != null) {
+			LoggingImplRegistration.registeredLoggingImpl().shutdown();
+		}
 	}
 
 	private static class ShutdownHook extends Thread {
-
+		ShutdownHook() {
+			setName("ShutdownHook");
+			setDaemon(false);
+		}
 		@Override
 		public void run() {
 			terminate0();
@@ -175,4 +200,5 @@ public class Application {
 	public interface IShutdownHandler {
 		void shutdown(Promise<Void> shutdownDone);
 	}
+
 }

@@ -1,7 +1,7 @@
 package com.denaliai.fw.http;
 
 import com.denaliai.fw.Application;
-import com.denaliai.fw.log4j.TestCaptureAppender;
+import com.denaliai.fw.log4j2.TestCaptureAppender;
 import com.denaliai.fw.utility.http.MinimalHTTPRequest;
 import io.netty.buffer.ByteBufUtil;
 import org.junit.jupiter.api.Assertions;

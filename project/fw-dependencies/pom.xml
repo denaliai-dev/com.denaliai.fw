@@ -54,7 +54,27 @@
             <!-- Framework -->
             <dependency>
                 <groupId>com.denaliai.fw</groupId>
+                <artifactId>fw-base-api</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.denaliai.fw</groupId>
+                <artifactId>fw-logging-impl-log4j2</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.denaliai.fw</groupId>
+                <artifactId>fw-logging-impl-jul</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.denaliai.fw</groupId>
                 <artifactId>fw-core</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.denaliai.fw</groupId>
+                <artifactId>fw-core-test</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
@@ -90,13 +110,6 @@
             </dependency>
 
             <!-- Third Party -->
-            <!--<dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-bom</artifactId>
-                <version>${log4j2.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>-->
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-api</artifactId>
