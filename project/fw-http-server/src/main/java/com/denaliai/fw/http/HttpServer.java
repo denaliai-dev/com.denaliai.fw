@@ -66,6 +66,9 @@ public final class HttpServer {
 
 	private HttpServer(HttpServerBuilder builder) {
 		LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + "." + builder.m_loggerNameSuffix);
+		if (LOG.isTraceEnabled()) {
+			LOG.trace("Setting up handlers");
+		}
 		m_connectHandler = (builder.m_connectHandler != null) ? builder.m_connectHandler : new NullHandler(LOG);
 		m_disconnectHandler = (builder.m_disconnectHandler != null) ? builder.m_disconnectHandler : new NullHandler(LOG);
 		m_failureHandler = (builder.m_failureHandler != null) ? builder.m_failureHandler : new NullHandler(LOG);
@@ -73,6 +76,9 @@ public final class HttpServer {
 		m_readTimeoutInMS = builder.m_readTimeoutInMS;
 		m_httpPort = builder.m_httpPort;
 
+		if (LOG.isTraceEnabled()) {
+			LOG.trace("Creating metrics");
+		}
 		m_listenerActive = MetricsEngine.newTotalCounterMetric(builder.m_loggerNameSuffix + ".listening");
 		m_newConnections = MetricsEngine.newCounterAndRateMetric(builder.m_loggerNameSuffix + ".new-connections");
 		m_disconnections = MetricsEngine.newCounterAndRateMetric(builder.m_loggerNameSuffix + ".disconnections");
@@ -88,6 +94,9 @@ public final class HttpServer {
 	}
 
 	private void init() {
+		if (LOG.isTraceEnabled()) {
+			LOG.trace("init() - start");
+		}
 		m_serverBootstrap.group(Application.getIOPool(), Application.getIOPool())
 			.channel(NioServerSocketChannel.class)
 			.handler(new ServerSocketHandler())
@@ -97,21 +106,26 @@ public final class HttpServer {
 			.childOption(ChannelOption.ALLOCATOR, Application.allocator())
 			.childOption(ChannelOption.SO_KEEPALIVE, true);
 
+//		if (LOG.isTraceEnabled()) {
+//			LOG.trace("Registering server");
+//		}
 		m_serverState = ServerState.Registering;
-		m_serverBootstrap.register().addListener((regFuture) -> {
-			if (regFuture.isSuccess()) {
-				if (LOG.isDebugEnabled()) {
-					LOG.debug("Server register successful");
-				}
-				m_registerDone.setSuccess(null);
-			} else {
-				if (LOG.isDebugEnabled()) {
-					LOG.debug("Server register failed");
-				}
-				m_registerDone.setFailure(regFuture.cause());
-			}
-		});
-
+//		m_serverBootstrap.register().addListener((regFuture) -> {
+//			if (regFuture.isSuccess()) {
+//				if (LOG.isTraceEnabled()) {
+//					LOG.trace("Server register successful");
+//				}
+//				m_registerDone.setSuccess(null);
+//			} else {
+//				if (LOG.isDebugEnabled()) {
+//					LOG.debug("Server register failed");
+//				}
+//				m_registerDone.setFailure(regFuture.cause());
+//			}
+//		});
+		if (LOG.isTraceEnabled()) {
+			LOG.trace("init() - end");
+		}
 	}
 
 	public synchronized Future<Void> start() {
@@ -125,14 +139,14 @@ public final class HttpServer {
 
 		m_stopDonePromise = null;
 		m_startDonePromise = Application.getTaskPool().next().newPromise();
-		m_registerDone.addListener((regDone) -> {
-			if (!regDone.isSuccess()) {
-				LOG.warn("register() of listening socket failed, HttpServer cannot start", regDone.cause());
-				m_serverState = ServerState.Offline;
-				m_startDonePromise.setFailure(regDone.cause());
-				serverRelease();
-				return;
-			}
+//		m_registerDone.addListener((regDone) -> {
+//			if (!regDone.isSuccess()) {
+//				LOG.warn("register() of listening socket failed, HttpServer cannot start", regDone.cause());
+//				m_serverState = ServerState.Offline;
+//				m_startDonePromise.setFailure(regDone.cause());
+//				serverRelease();
+//				return;
+//			}
 			m_serverState = ServerState.Binding;
 			final ChannelFuture f;
 			try {
@@ -142,10 +156,10 @@ public final class HttpServer {
 				m_serverState = ServerState.Offline;
 				m_startDonePromise.setFailure(t);
 				serverRelease();
-				return;
+				return m_startDonePromise;
 			}
 			f.addListener(new BindListener());
-		});
+//		});
 		return m_startDonePromise;
 	}
 
