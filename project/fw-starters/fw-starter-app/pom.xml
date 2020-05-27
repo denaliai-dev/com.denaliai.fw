@@ -7,31 +7,11 @@
 		<version>${revision}</version>
 	</parent>
 	
-	<artifactId>fw-starter-service</artifactId>
+	<artifactId>fw-starter-app</artifactId>
 	<packaging>pom</packaging>
-	<name>DenaliAI Framework starter dependency for java service applications</name>
-	<description>DenaliAI Framework starter dependency for java service applications</description>
+	<name>DenaliAI Framework starter dependency for java loose applications</name>
+	<description>DenaliAI Framework starter dependency for java loose applications</description>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-jar-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-				<version>1.5.16.RELEASE</version>
-				<executions>
-					<execution>
-						<goals>
-							<goal>repackage</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
 	<dependencies>
 		<dependency>
 			<groupId>com.denaliai.fw</groupId>

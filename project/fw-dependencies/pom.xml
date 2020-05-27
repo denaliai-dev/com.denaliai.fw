@@ -108,6 +108,12 @@
                 <version>${revision}</version>
                 <type>pom</type>
             </dependency>
+            <dependency>
+                <groupId>com.denaliai.fw</groupId>
+                <artifactId>fw-starter-app</artifactId>
+                <version>${revision}</version>
+                <type>pom</type>
+            </dependency>
 
             <!-- Third Party -->
             <dependency>
