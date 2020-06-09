@@ -27,41 +27,12 @@ public final class Config {
 			addConfigDataset("system-properties", System.getProperties().entrySet());
 			PRINT_DEBUG_MESSAGES = Config.getFWBoolean("core.configDebugLog", PRINT_DEBUG_MESSAGES); // Get setting as defined by system properties
 
+			loadConfigFile("app.properties", false);
 			final String propFiles = getString(FW_PREFIX + "config.propertiesFiles", null);
 			if (propFiles != null) {
 				String[] filenames = propFiles.split(",");
 				for(String filename : filenames) {
-					final String fn = filename.trim();
-					final File f = new File(fn);
-					try {
-						if (f.exists()) {
-							final Properties p = new Properties();
-							final FileReader in = new FileReader(f);
-							try {
-								p.load(in);
-							} finally {
-								in.close();
-							}
-							addConfigDataset(filename, p.entrySet(), true);
-						} else {
-							InputStream in = Config.class.getClassLoader().getResourceAsStream(fn);
-							if (in != null) {
-								final Properties p = new Properties();
-								try {
-									p.load(in);
-								} finally {
-									in.close();
-								}
-								addConfigDataset(filename, p.entrySet(), true);
-							} else {
-								LOG.warn("Could not find properties file '%1$s', continuing without it", f.getAbsolutePath());
-								continue;
-							}
-						}
-					} catch(Throwable t) {
-						LOG.warn("Exception reading properties file '%1$s', continuing without it", f.getAbsolutePath());
-						t.printStackTrace();
-					}
+					loadConfigFile(filename, true);
 				}
 			}
 		} catch(Throwable t) {
@@ -72,6 +43,42 @@ public final class Config {
 	}
 
 	private Config() {
+	}
+
+	private static void loadConfigFile(String filename, boolean logIfNotFound) {
+		final String fn = filename.trim();
+		final File f = new File(fn);
+		try {
+			if (f.exists()) {
+				final Properties p = new Properties();
+				final FileReader in = new FileReader(f);
+				try {
+					p.load(in);
+				} finally {
+					in.close();
+				}
+				addConfigDataset(filename, p.entrySet(), true);
+			} else {
+				InputStream in = Config.class.getClassLoader().getResourceAsStream(fn);
+				if (in != null) {
+					final Properties p = new Properties();
+					try {
+						p.load(in);
+					} finally {
+						in.close();
+					}
+					addConfigDataset(filename, p.entrySet(), true);
+				} else {
+					if (logIfNotFound) {
+						LOG.warn("Could not find properties file '%1$s', continuing without it", f.getAbsolutePath());
+					}
+					return;
+				}
+			}
+		} catch(Throwable t) {
+			LOG.warn("Exception reading properties file '%1$s', continuing without it", f.getAbsolutePath());
+			t.printStackTrace();
+		}
 	}
 
 	public static void setConfigLogger(IConfigLogger logger) {

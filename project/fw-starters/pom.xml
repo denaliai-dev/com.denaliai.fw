@@ -16,6 +16,7 @@
 	</properties>
 	<modules>
 		<module>fw-starter-parent</module>
+		<module>fw-starter-service-parent</module>
 		<module>fw-starter-service</module>
 		<module>fw-starter-app</module>
 	</modules>

@@ -132,7 +132,6 @@ public class Application {
 			} catch (Throwable ex) {
 				ex.printStackTrace(System.err);
 			}
-			System.out.println("terminate() done");
 		}, "terminate()");
 		t.setDaemon(false);
 		t.start();

@@ -2,6 +2,7 @@ package com.denaliai.fw.mongo;
 
 import com.denaliai.fw.Application;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoCredential;
 import com.mongodb.ServerAddress;
 import com.mongodb.connection.netty.NettyStreamFactoryFactory;
 import com.mongodb.reactivestreams.client.MongoClient;
@@ -10,17 +11,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 public class DenaliMongoClient {
 	private static final Logger LOG = LoggerFactory.getLogger(DenaliMongoClient.class);
 	private final List<ServerAddress> m_clusterHosts;
+	private final MongoDBCrediential m_credential;
 	private final IMongoClientConnect m_connectHandler;
 	private final IMongoClientDisconnect m_disconnectHandler;
 	private MongoClient m_mongoClient;
 
 	private DenaliMongoClient(DenaliMongoClientBuilder builder) {
 		m_clusterHosts = builder.m_clusterHosts;
+		m_credential = builder.m_credential;
 		m_connectHandler = builder.m_connectHandler;
 		m_disconnectHandler = builder.m_disconnectHandler;
 	}
@@ -33,7 +37,7 @@ public class DenaliMongoClient {
 		if (m_mongoClient != null) {
 			throw new IllegalStateException("DenaliMongoClient is already started");
 		}
-		MongoClientSettings settings = MongoClientSettings.builder()
+		MongoClientSettings.Builder builder = MongoClientSettings.builder()
 			.streamFactoryFactory(NettyStreamFactoryFactory.builder().allocator(Application.allocator()).eventLoopGroup(Application.getIOPool()).build())
 //			.applyToServerSettings((serverSettings) -> {
 //				serverSettings.addServerListener(new ServerListener() {
@@ -113,8 +117,12 @@ public class DenaliMongoClient {
 //						}
 //					}
 //				});
-			})
-			.build();
+			});
+		if (m_credential != null) {
+//			builder.credential(MongoCredential.createScramSha1Credential(m_credential.userName, m_credential.dbName, m_credential.password.toCharArray()));
+			builder.credential(MongoCredential.createCredential(m_credential.userName, m_credential.dbName, m_credential.password.toCharArray()));
+		}
+		MongoClientSettings settings = builder.build();
 		m_mongoClient = MongoClients.create(settings);
 		return m_mongoClient;
 	}
@@ -126,6 +134,17 @@ public class DenaliMongoClient {
 //		}
 //	}
 
+	public static class MongoDBCrediential {
+		public final String userName;
+		public final String password;
+		public final String dbName;
+
+		public MongoDBCrediential(String userName, String dbName, String password) {
+			this.userName = userName;
+			this.dbName = dbName;
+			this.password = password;
+		}
+	}
 	public static class MongoServerAddress {
 		final String hostName;
 		final int port;
@@ -142,6 +161,7 @@ public class DenaliMongoClient {
 
 	public static class DenaliMongoClientBuilder {
 		private final List<ServerAddress> m_clusterHosts;
+		private MongoDBCrediential m_credential;
 		private IMongoClientConnect m_connectHandler = new StubHandler();
 		private IMongoClientDisconnect m_disconnectHandler = (IMongoClientDisconnect)m_connectHandler;
 
@@ -150,6 +170,11 @@ public class DenaliMongoClient {
 			for(MongoServerAddress addr : clusterHosts) {
 				m_clusterHosts.add(new ServerAddress(addr.hostName, addr.port));
 			}
+		}
+
+		public DenaliMongoClientBuilder credential(MongoDBCrediential credential) {
+			m_credential = credential;
+			return this;
 		}
 //
 //		public DenaliMongoClientBuilder onConnect(IMongoClientConnect handler) {

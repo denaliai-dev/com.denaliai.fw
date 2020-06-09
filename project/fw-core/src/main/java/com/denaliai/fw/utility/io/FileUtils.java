@@ -47,6 +47,15 @@ public class FileUtils {
 		return data;
 	}
 
+	public static final void appendFile(String fileName, String fileContents) throws IOException {
+		final FileWriter out = new FileWriter(fileName, true);
+		try {
+			out.write(fileContents);
+		} finally {
+			out.close();
+		}
+	}
+
 	public static final void writeFile(String fileName, String fileContents) throws IOException {
 		final FileWriter out = new FileWriter(fileName);
 		try {

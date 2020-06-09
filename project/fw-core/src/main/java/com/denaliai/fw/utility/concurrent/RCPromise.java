@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
@@ -118,7 +119,7 @@ public class RCPromise<T> extends AbstractReferenceCounted implements RCFuture<T
 	 */
 	@Override
 	public boolean await(long timeoutInMS) {
-		long timeoutNanos = timeoutInMS * 1000;
+		long timeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutInMS);
 		if (timeoutNanos <= 0) {
 			return isDone();
 		}
@@ -237,12 +238,12 @@ public class RCPromise<T> extends AbstractReferenceCounted implements RCFuture<T
 
 		RCInteger current = m_notifyDepth.get();
 		if (current == null) {
-			current = RCInteger.create(0);
+			current = RCInteger.create(1);
 			m_notifyDepth.set(current);
 		} else {
 			current.increment();
 		}
-		final boolean callDirect = (current.value() < MAX_NOTIFY_DEPTH);
+		final boolean callDirect = (current.value() <= MAX_NOTIFY_DEPTH);
 		while(true) {
 			ListenerWrapper w = m_listeners.poll();
 			if (w == null) {
