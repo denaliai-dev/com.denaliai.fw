@@ -47,4 +47,4 @@ dependency-reduced-pom.xml
 .flattened-pom.xml
 
 # Output from unit tests
-project/fw-core/metrics/*.metrics
+**/metrics/*.metrics

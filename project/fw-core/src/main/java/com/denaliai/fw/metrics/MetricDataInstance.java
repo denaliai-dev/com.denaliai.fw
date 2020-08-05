@@ -120,4 +120,27 @@ final class MetricDataInstance {
 		unlock();
 		return true;
 	}
+
+	public boolean set(MinMaxAvgValueMetric m, int value) {
+		if (!lock()) {
+			return false;
+		}
+		if (m.indexOfMax >= m_data.length) {
+			// The caller was loaded AFTER this data instance was created, we can only ignore the data for now
+			resizeData();
+		}
+		if (m_data[m.initIndex] == 0) {
+			m.resetDataForNextSnapshot(m_data);
+		}
+		if (value < m_data[m.indexOfMin]) {
+			m_data[m.indexOfMin] = value;
+		}
+		if (value > m_data[m.indexOfMax]) {
+			m_data[m.indexOfMax] = value;
+		}
+		m_data[m.indexOfCount]++;
+		m_data[m.indexOfTotal] += value;
+		unlock();
+		return true;
+	}
 }

@@ -25,6 +25,10 @@ public class MinMaxAvgValueMetric extends MetricBase {
 		m_consumerKey_Max = name + ".max";
 	}
 
+	public void set(int value) {
+		MetricsEngine.set(this, value);
+	}
+
 	void ensureInitialized(long[] data) {
 		if (indexOfMax >= data.length) {
 			return;

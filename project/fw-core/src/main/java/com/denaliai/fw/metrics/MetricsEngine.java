@@ -215,6 +215,16 @@ public final class MetricsEngine {
 		}
 	}
 
+	static void set(MinMaxAvgValueMetric m, int value) {
+		MetricDataInstance data = MetricsEngine.current();
+		if (!data.set(m, value)) {
+			data = MetricsEngine.newDataInstance();
+			if (!data.set(m, value)) {
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+			}
+		}
+	}
+
 	static void increment(int index) {
 		MetricDataInstance data = MetricsEngine.current();
 		if (!data.increment(index)) {
