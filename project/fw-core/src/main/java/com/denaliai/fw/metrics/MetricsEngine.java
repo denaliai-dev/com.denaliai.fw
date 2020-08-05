@@ -68,6 +68,12 @@ public final class MetricsEngine {
 		return m;
 	}
 
+	public synchronized static MinMaxAvgValueMetric newMinMaxAvgValueMetric(String name) {
+		MinMaxAvgValueMetric m = new MinMaxAvgValueMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++);
+		m_metrics.add(m);
+		return m;
+	}
+
 	private synchronized static List<MetricBase> currentMetrics() {
 		return new ArrayList<>(m_metrics);
 	}

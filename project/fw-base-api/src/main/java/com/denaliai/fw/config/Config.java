@@ -10,24 +10,38 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class Config {
-	public static final String FW_PREFIX = "com.denaliai.fw.";
+	public static final String FW_PREFIX;
 
 	private static final AtomicReference<Map<String, Setting>> m_settings = new AtomicReference<>(new HashMap<>());
 	private static final GetValueAsInt m_intGetter = new GetValueAsInt();
 	private static final GetValueAsLong m_longGetter = new GetValueAsLong();
 	private static final GetValueAsBool m_boolGetter = new GetValueAsBool();
 	private static final GetValueAsString m_stringGetter = new GetValueAsString();
-	private static boolean PRINT_DEBUG_MESSAGES = false;
+	private static final boolean PRINT_DEBUG_MESSAGES;
+	private static final boolean ADD_PROPS_FILES_TO_SYS_PROPS;
 	private static IConfigLogger LOG = new ConsoleLogger();
 
 	static {
+		String fwPrefix = System.getenv().get("FW_PREFIX");
+		if (fwPrefix == null) {
+			fwPrefix = System.getProperty("FW_PREFIX", "com.denaliai.fw.");
+		}
+		FW_PREFIX = fwPrefix;
+
+		final String printDebugMsgs = FW_PREFIX + ".configDebugLog";
+		PRINT_DEBUG_MESSAGES = "true".equals(System.getenv().get(printDebugMsgs)) || "true".equals(System.getProperty(printDebugMsgs));
+
+		final String addPropsFilesToSysProps = FW_PREFIX + ".config.addPropsFilesToSysProps";
+		ADD_PROPS_FILES_TO_SYS_PROPS = "true".equals(System.getenv().get(addPropsFilesToSysProps)) || "true".equals(System.getProperty(addPropsFilesToSysProps));
+
 		try {
 			addConfigDataset("environment", System.getenv().entrySet());
-			PRINT_DEBUG_MESSAGES = Config.getFWBoolean("core.configDebugLog", false); // Get setting from environment
 			addConfigDataset("system-properties", System.getProperties().entrySet());
-			PRINT_DEBUG_MESSAGES = Config.getFWBoolean("core.configDebugLog", PRINT_DEBUG_MESSAGES); // Get setting as defined by system properties
 
+			// Load the default properties file name
 			loadConfigFile("app.properties", false);
+
+			// Load user-defined properties files
 			final String propFiles = getString(FW_PREFIX + "config.propertiesFiles", null);
 			if (propFiles != null) {
 				String[] filenames = propFiles.split(",");
@@ -57,7 +71,7 @@ public final class Config {
 				} finally {
 					in.close();
 				}
-				addConfigDataset(filename, p.entrySet(), true);
+				addConfigDataset(filename, p.entrySet(), ADD_PROPS_FILES_TO_SYS_PROPS);
 			} else {
 				InputStream in = Config.class.getClassLoader().getResourceAsStream(fn);
 				if (in != null) {
@@ -67,7 +81,7 @@ public final class Config {
 					} finally {
 						in.close();
 					}
-					addConfigDataset(filename, p.entrySet(), true);
+					addConfigDataset(filename, p.entrySet(), ADD_PROPS_FILES_TO_SYS_PROPS);
 				} else {
 					if (logIfNotFound) {
 						LOG.warn("Could not find properties file '%1$s', continuing without it", f.getAbsolutePath());
@@ -102,7 +116,7 @@ public final class Config {
 	}
 
 	@SuppressWarnings("rawtypes")
-	private static void addConfigDataset(String sourceName, Set data, boolean addToSystemProperties) {
+	public static void addConfigDataset(String sourceName, Set data, boolean addToSystemProperties) {
 		synchronized(Config.class) {
 			final Map<String, Setting> newSettings = new HashMap<>(m_settings.get());
 			for(Object o : data) {

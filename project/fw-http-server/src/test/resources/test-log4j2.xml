@@ -11,7 +11,8 @@
         </LevelCheck>
     </Appenders>
     <Loggers>
-        <Root level="${Root-Logger-Level}">
+<!--        <Root level="${Root-Logger-Level}">-->
+        <Root level="DEBUG">
             <AppenderRef ref="Level-Check-Appender"/>
             <AppenderRef ref="Capture-Appender"/>
         </Root>

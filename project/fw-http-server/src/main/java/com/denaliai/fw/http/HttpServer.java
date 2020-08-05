@@ -477,9 +477,6 @@ public final class HttpServer {
 			if (LOG.isDebugEnabled()) {
 				LOG.debug("[{}] ServerSocketHandler.channelActive(), serverState {}", ctx.channel(), m_serverState);
 			}
-//					if (m_deinitializing) {
-//						return;
-//					}
 			// The server socket (listening socket) maintains a ref to the HttpServer
 			serverRetain();
 			m_listenerActive.increment();
@@ -488,7 +485,6 @@ public final class HttpServer {
 			m_serverConnection = ctx.channel();
 
 			LOG.info("Listening for HTTP requests on port {}", m_httpPort);
-//			StatusSystem.setInboundStatus(m_statusHostAndPort, StatusType.Up, "Listening");
 			m_startDonePromise.setSuccess(null);
 
 			super.channelActive(ctx);
@@ -506,12 +502,8 @@ public final class HttpServer {
 			// Channel has closed
 			m_serverState = ServerState.Offline;
 
-			// We only add a reference to the HttpServer once we go active, but we never did
 			serverRelease();
 			m_listenerActive.decrement();
-
-//			NeuronApplication.logInfo(LOG, "Listener closed");
-//			StatusSystem.setInboundStatus(m_statusHostAndPort, StatusType.Down, "Not listening, neuron deinitialized");
 
 			super.channelInactive(ctx);
 		}
@@ -525,7 +517,6 @@ public final class HttpServer {
 			if (m_serverState == ServerState.Binding) {
 				LOG.info("[{}] Exception binding socket, calling close", ctx.channel(), cause);
 				ctx.close();
-				// TODO restart bind?
 			}
 		}
 	}
