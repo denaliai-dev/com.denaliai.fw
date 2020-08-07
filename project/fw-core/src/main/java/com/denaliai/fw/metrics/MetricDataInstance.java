@@ -21,9 +21,7 @@ final class MetricDataInstance {
 	}
 
 	void processData(long[] snapshotData, MetricBase m) {
-		if (m instanceof DurationRateMetric) {
-			((DurationRateMetric)m).ensureInitialized(snapshotData);
-		}
+		m.ensureInitialized(snapshotData);
 		m.addDataToSnapshot(snapshotData, m_data);
 	}
 

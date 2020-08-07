@@ -29,6 +29,7 @@ public class DurationRateMetric extends MetricBase {
 		m_consumerKey_MaxDur = name + ".max-duration-ms";
 	}
 
+	@Override
 	void ensureInitialized(long[] data) {
 		if (indexOfMax >= data.length) {
 			return;

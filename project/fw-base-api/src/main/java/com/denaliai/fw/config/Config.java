@@ -28,10 +28,10 @@ public final class Config {
 		}
 		FW_PREFIX = fwPrefix;
 
-		final String printDebugMsgs = FW_PREFIX + ".configDebugLog";
+		final String printDebugMsgs = FW_PREFIX + "configDebugLog";
 		PRINT_DEBUG_MESSAGES = "true".equals(System.getenv().get(printDebugMsgs)) || "true".equals(System.getProperty(printDebugMsgs));
 
-		final String addPropsFilesToSysProps = FW_PREFIX + ".config.addPropsFilesToSysProps";
+		final String addPropsFilesToSysProps = FW_PREFIX + "config.addPropsFilesToSysProps";
 		ADD_PROPS_FILES_TO_SYS_PROPS = "true".equals(System.getenv().get(addPropsFilesToSysProps)) || "true".equals(System.getProperty(addPropsFilesToSysProps));
 
 		try {

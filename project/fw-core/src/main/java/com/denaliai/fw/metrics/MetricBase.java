@@ -14,4 +14,6 @@ abstract class MetricBase {
 	abstract void addDataToSnapshot(long[] snapshotData, long[] instanceData);
 	abstract void resetDataForNextSnapshot(long[] snapshotData);
 	abstract void report(long[] snapshotData, long snapshotDurationMS, MetricsEngine.ISnapshotConsumer consumer);
+	void ensureInitialized(long[] data) {
+	}
 }

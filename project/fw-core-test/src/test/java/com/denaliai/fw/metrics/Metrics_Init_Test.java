@@ -23,6 +23,9 @@ public class Metrics_Init_Test extends TestBase {
 		total.decrement();
 		rate.record(timer);
 		timer.close();
+		MinMaxAvgValueMetric minMax = MetricsEngine.newMinMaxAvgValueMetric("minMax");
+		minMax.set(4);
+		minMax.set(10);
 
 		CountDownLatch doneLatch = new CountDownLatch(1);
 		Map<String, Long> metricSnapshot = new HashMap<String, Long>();
@@ -42,6 +45,9 @@ public class Metrics_Init_Test extends TestBase {
 		Assertions.assertEquals(2, metricSnapshot.get("counter.count"));
 		Assertions.assertEquals(1, metricSnapshot.get("total.count"));
 		Assertions.assertEquals(1, metricSnapshot.get("rate.count"));
+		Assertions.assertEquals(4, metricSnapshot.get("minMax.min"));
+		Assertions.assertEquals(10, metricSnapshot.get("minMax.max"));
+		Assertions.assertEquals(7, metricSnapshot.get("minMax.avg"));
 		for(Map.Entry<String, Long> entry : metricSnapshot.entrySet()) {
 			System.out.println(entry.getKey() + ": " + entry.getValue());
 		}

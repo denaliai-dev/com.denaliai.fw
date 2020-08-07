@@ -29,6 +29,7 @@ public class MinMaxAvgValueMetric extends MetricBase {
 		MetricsEngine.set(this, value);
 	}
 
+	@Override
 	void ensureInitialized(long[] data) {
 		if (indexOfMax >= data.length) {
 			return;
