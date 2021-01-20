@@ -11,6 +11,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
@@ -20,11 +21,15 @@ import io.netty.util.internal.PlatformDependent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class HttpServer {
+	private static final String DEFAULT_SSL_PROTOCOL = "TLSv1.2";
 	private static final int SERVER_BACKLOG = Config.getFWInt("http.HttpServer.defaultServerSocketBacklog", 128);
 	private static final int MAX_CONTENT_SIZE = Config.getFWInt("http.HttpServer.maxContentSize", 512*1024);
 	private static final String ACCESS_CONTROL_ALLOW_ORIGIN = Config.getFWString("http.HttpServer.accessControlAllowOrigin", null);
@@ -57,6 +62,7 @@ public final class HttpServer {
 	private final int m_readTimeoutInMS;
 
 	private final AtomicInteger m_httpServerRefCount = new AtomicInteger();
+	private final SSLContext m_sslContext;
 	private Promise<Void> m_startDonePromise;
 	private volatile Promise<Void> m_stopDonePromise;
 	private boolean m_isStarted = false;
@@ -89,6 +95,12 @@ public final class HttpServer {
 		m_requestDataSize = MetricsEngine.newValueMetric(builder.m_loggerNameSuffix + ".request-bytes");
 		m_responseDataSize = MetricsEngine.newValueMetric(builder.m_loggerNameSuffix + ".response-bytes");
 		m_earlyDisconnects = MetricsEngine.newCounterMetric(builder.m_loggerNameSuffix + ".early-disconnect");
+
+		if (builder.m_useSSL) {
+			m_sslContext = HttpServerUtils.createServerSSLContext(builder.m_sslProtocol, builder.m_serverKeyStoreFileName, builder.m_serverKeyStorePassword, builder.m_serverKeyStoreFileFormat, builder.m_serverKeyStoreKeyAlgorithm);
+		} else {
+			m_sslContext = null;
+		}
 
 		init();
 	}
@@ -219,15 +231,10 @@ public final class HttpServer {
 					LOG.info("[{}] Channel bound", future.channel());
 				}
 			} else {
-				// TODO add a retry timer when a bind failure because port is in use.
-				// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 				// it might just be a lazy cleanup of the socket from a previous run
 				m_serverState = ServerState.Offline;
 				m_serverConnection = null;
 
-				//future.channel().close(); No need to close, it never opened?
-//					NeuronApplication.logError(LOG, "Bind to port {} failed, taking neuron offline", m_port, cause);
-//					StatusSystem.setInboundStatus(m_statusHostAndPort, StatusType.Down, statusText);
 				if (LOG.isDebugEnabled()) {
 					LOG.info("Exception during bind", future.cause());
 				} else {
@@ -240,6 +247,12 @@ public final class HttpServer {
 
 	}
 
+	private SslHandler sslHandler() {
+		SSLEngine sslEngine = m_sslContext.createSSLEngine();
+		sslEngine.setUseClientMode(false);
+		sslEngine.setNeedClientAuth(false);
+		return new SslHandler(sslEngine);
+	}
 
 	private class MyChannelInitializer extends ChannelInitializer<SocketChannel> {
 //		This is never called
@@ -272,9 +285,9 @@ public final class HttpServer {
 			}
 			final ChannelPipeline pipeline = childChannel.pipeline();
 			pipeline.addLast(m_childSocketByteCounter);
-//			if (m_sslContext != null) {
-//				pipeline.addLast("sslEngine", m_sslContext.newHandler(childChannel.alloc()));
-//			}
+			if (m_sslContext != null) {
+				pipeline.addLast("sslEngine", sslHandler());
+			}
 			if (LOG.isTraceEnabled()) {
 				pipeline.addLast("data-logger", new DataLogHandler(LOG));
 			}
@@ -543,6 +556,16 @@ public final class HttpServer {
 			m_channel = channel;
 		}
 
+		@Override
+		public void updateReadTimeout(long readTimeoutInMS) {
+			m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(readTimeoutInMS, TimeUnit.MILLISECONDS));
+		}
+
+		@Override
+		public void clearReadTimeout() {
+			m_channel.pipeline().remove("read-timeout");
+		}
+
 		void callOnConnect() {
 			m_msgQueue.add(m_onConnect);
 			requestMoreWork();
@@ -761,7 +784,12 @@ public final class HttpServer {
 		private int m_httpPort = Config.getFWInt("http.HttpServer.defaultHttpPort", 80);
 		private int m_readTimeoutInMS = Config.getFWInt("http.HttpServer.readTimeoutMS", 5000);
 		private String m_loggerNameSuffix;
-
+		private boolean m_useSSL = false;
+		private String m_sslProtocol = DEFAULT_SSL_PROTOCOL;
+		private String m_serverKeyStoreFileName =  Config.getFWString("http.HttpServer.keyStoreFileName", null);
+		private String m_serverKeyStorePassword =  Config.getFWString("http.HttpServer.keyStorePassword", "changeit");
+		private String m_serverKeyStoreFileFormat =  Config.getFWString("http.HttpServer.keyStoreFileFormat", "jks");
+		private String m_serverKeyStoreKeyAlgorithm = KeyManagerFactory.getDefaultAlgorithm();
 
 		public HttpServerBuilder loggerNameSuffix(String name) {
 			m_loggerNameSuffix = name;
@@ -786,6 +814,30 @@ public final class HttpServer {
 		}
 		public HttpServerBuilder listenPort(int port) {
 			m_httpPort = port;
+			return this;
+		}
+		public HttpServerBuilder useSSL(boolean useSSL) {
+			m_useSSL = useSSL;
+			return this;
+		}
+		public HttpServerBuilder sslProtocol(String protocol) {
+			m_sslProtocol = protocol;
+			return this;
+		}
+		public HttpServerBuilder sslKeyStoreFileName(String fileName) {
+			m_serverKeyStoreFileName = fileName;
+			return this;
+		}
+		public HttpServerBuilder sslKeyStorePassword(String password) {
+			m_serverKeyStorePassword = password;
+			return this;
+		}
+		public HttpServerBuilder sslKeyStoreFileFormat(String fileFormat) {
+			m_serverKeyStoreFileFormat = fileFormat;
+			return this;
+		}
+		public HttpServerBuilder sslKeyStoreKeyAlgorithm(String algorithm) {
+			m_serverKeyStoreKeyAlgorithm = algorithm;
 			return this;
 		}
 		public HttpServer build() {
@@ -815,6 +867,8 @@ public final class HttpServer {
 		void addHeader(String key, String value);
 		void respondOk(ByteBuf data);
 		void respond(HttpResponseStatus httpResponseStatus, ByteBuf data);
+		void clearReadTimeout();
+		void updateReadTimeout(long newTimeoutInMS);
 	}
 	public interface IConnectHandler {
 		void onConnect(ISocketConnection connection);
