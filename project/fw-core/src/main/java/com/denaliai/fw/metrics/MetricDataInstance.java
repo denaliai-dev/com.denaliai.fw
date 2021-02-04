@@ -22,6 +22,7 @@ final class MetricDataInstance {
 
 	void processData(long[] snapshotData, MetricBase m) {
 		m.ensureInitialized(snapshotData);
+		m.ensureInitialized(m_data);
 		m.addDataToSnapshot(snapshotData, m_data);
 	}
 

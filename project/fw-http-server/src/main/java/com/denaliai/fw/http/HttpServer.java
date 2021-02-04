@@ -12,6 +12,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
@@ -550,6 +551,7 @@ public final class HttpServer {
 		private HttpMethod m_httpRequestMethod;
 		private FullHttpRequest m_httpRequest;
 		private Map<String,String> m_responseHeaders;
+		private boolean m_updatedReadTimeout;
 
 		Connection(String connectionToString, Channel channel) {
 			m_connectionToString = connectionToString;
@@ -558,12 +560,15 @@ public final class HttpServer {
 
 		@Override
 		public void updateReadTimeout(long readTimeoutInMS) {
+			m_updatedReadTimeout = true;
 			m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(readTimeoutInMS, TimeUnit.MILLISECONDS));
 		}
 
 		@Override
 		public void clearReadTimeout() {
-			m_channel.pipeline().remove("read-timeout");
+			m_updatedReadTimeout = true;
+			// Need to leave the handler in its place, so replace it with something that does nothing
+			m_channel.pipeline().replace("read-timeout", "read-timeout", new IdleStateHandler(0, 0, 0));
 		}
 
 		void callOnConnect() {
@@ -678,6 +683,11 @@ public final class HttpServer {
 			if (m_requestTimer != null) {
 				m_requestTimer.close();
 				m_requestTimer = null;
+			}
+			if (m_updatedReadTimeout) {
+				// Replace read timeout with default
+				m_updatedReadTimeout = false;
+				m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(m_readTimeoutInMS, TimeUnit.MILLISECONDS));
 			}
 		}
 
