@@ -6,12 +6,15 @@ import com.denaliai.fw.metrics.*;
 import com.denaliai.fw.utility.concurrent.PerpetualWork;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.stream.ChunkedNioFile;
+import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.AttributeKey;
@@ -22,12 +25,22 @@ import io.netty.util.internal.PlatformDependent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.activation.MimetypesFileTypeMap;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static io.netty.handler.codec.http.HttpResponseStatus.*;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_0;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 public final class HttpServer {
 	private static final String DEFAULT_SSL_PROTOCOL = "TLSv1.2";
@@ -37,6 +50,7 @@ public final class HttpServer {
 	private static final String ACCESS_CONTROL_ALLOW_METHODS = Config.getFWString("http.HttpServer.accessControlAllowMethods", null);
 	private static final String ACCESS_CONTROL_ALLOW_HEADERS = Config.getFWString("http.HttpServer.accessControlAllowHeaders", null);
 	private static final AttributeKey<Connection> CONNECTION = AttributeKey.newInstance("ConnectionClass");
+	private static final MimetypesFileTypeMap m_mimeTypesMap = new MimetypesFileTypeMap();
 
 	private final CounterAndRateMetric m_newConnections;
 	private final CounterAndRateMetric m_disconnections;
@@ -300,6 +314,7 @@ public final class HttpServer {
 			}
 			pipeline.addLast("keepAlive", new HttpServerKeepAliveHandler());
 			pipeline.addLast("aggregator", new HttpObjectAggregator(MAX_CONTENT_SIZE, true));
+			pipeline.addLast("chunkWrite", new ChunkedWriteHandler());
 			pipeline.addLast(m_connectionMsgHandler);
 
 			final Connection c = new Connection(remoteHostAddress, childChannel);
@@ -638,11 +653,102 @@ public final class HttpServer {
 		}
 
 		@Override
+		public void respondOk(File file, int httpCacheSeconds) {
+			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+			// Cache Validation
+			String ifModifiedSince = m_httpRequest.headers().get(HttpHeaderNames.IF_MODIFIED_SINCE);
+			if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
+				final Date ifModifiedSinceDate;
+				try {
+					ifModifiedSinceDate = dateFormatter.parse(ifModifiedSince);
+				} catch(ParseException ex) {
+					respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
+					return;
+				}
+
+				// Only compare up to the second because the datetime format we send to the client
+				// does not have milliseconds
+				long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
+				long fileLastModifiedSeconds = file.lastModified() / 1000;
+				if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
+					respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
+					return;
+				}
+			}
+
+			RandomAccessFile raf = null;
+			final DefaultHttpResponse response;
+			final HttpChunkedInput responseBody;
+			try {
+				raf = new RandomAccessFile(file, "r");
+				final long fileLength = raf.length();
+				response = new DefaultHttpResponse(m_httpRequestProtocolVersion, HttpResponseStatus.OK);
+				responseBody = new HttpChunkedInput(new ChunkedNioFile(raf.getChannel(), 0, fileLength, 8192));
+				final HttpHeaders headers = response.headers();
+
+				final String contentType = m_mimeTypesMap.getContentType(file);
+				headers.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
+				headers.set(HttpHeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"");
+				headers.add(HttpHeaderNames.CONTENT_LENGTH, fileLength);
+				headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
+				setCORSHeaders(headers);
+				setConnectionHeader(headers);
+
+				final Calendar time = new GregorianCalendar();
+
+				// Date header
+				addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(time.getTimeInMillis()));
+
+				// Add cache headers
+				time.add(Calendar.SECOND, httpCacheSeconds);
+				addHeader(HttpHeaderNames.EXPIRES.toString(), dateFormatter.format(time.getTimeInMillis()));
+				addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "private, max-age=" + httpCacheSeconds);
+				addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), dateFormatter.format(file.lastModified()));
+
+				if (m_responseHeaders != null) {
+					for (Map.Entry<String, String> e : m_responseHeaders.entrySet()) {
+						headers.add(e.getKey(), e.getValue());
+					}
+					m_responseHeaders = null;
+				}
+			} catch(IOException ex) {
+				LOG.error("Exception reading file {}", file.getAbsolutePath(), ex);
+				respond(INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER);
+				if (raf != null) {
+					try {
+						raf.close();
+					} catch(Exception ex2) {
+					}
+				}
+				return;
+			}
+			m_msgQueue.add(response);
+			m_msgQueue.add(responseBody);
+			requestMoreWork();
+		}
+
+		@Override
 		public void respond(HttpResponseStatus httpResponseStatus, ByteBuf data) {
 			DefaultFullHttpResponse response = new DefaultFullHttpResponse(m_httpRequestProtocolVersion, httpResponseStatus, data);
 			HttpHeaders headers = response.headers();
 			headers.add(HttpHeaderNames.CONTENT_LENGTH, data.readableBytes());
 
+			setCORSHeaders(headers);
+			setConnectionHeader(headers);
+
+			if (m_responseHeaders != null) {
+				for(Map.Entry<String,String> e : m_responseHeaders.entrySet()) {
+					headers.add(e.getKey(), e.getValue());
+				}
+				m_responseHeaders = null;
+			}
+			m_msgQueue.add(response);
+			requestMoreWork();
+		}
+
+		private void setCORSHeaders(HttpHeaders headers) {
 			String secFetchMode = m_httpRequest.headers().get("sec-fetch-mode");
 			if ("cors".equals(secFetchMode)) {
 				if (ACCESS_CONTROL_ALLOW_ORIGIN != null) {
@@ -655,15 +761,59 @@ public final class HttpServer {
 					headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_HEADERS);
 				}
 			}
-			if (m_responseHeaders != null) {
-				for(Map.Entry<String,String> e : m_responseHeaders.entrySet()) {
-					headers.add(e.getKey(), e.getValue());
-				}
-				m_responseHeaders = null;
-			}
-			m_msgQueue.add(response);
-			requestMoreWork();
 		}
+
+		private void setConnectionHeader(HttpHeaders headers) {
+			if (!HttpUtil.isKeepAlive(m_httpRequest)) {
+				// We're going to close the connection as soon as the response is sent,
+				// so we should also make it clear for the client.
+				headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+			} else if (m_httpRequest.protocolVersion().equals(HTTP_1_0)) {
+				headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+			}
+		}
+
+		@Override
+		public void respondNotModified() {
+			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+			FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
+
+			// Date header
+			addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
+
+			respond(HttpResponseStatus.OK, Unpooled.EMPTY_BUFFER);
+		}
+
+		@Override
+		public void setStaticContentHeaders(long itemLastModified, String contentType, int httpCacheSeconds) {
+			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+			final Calendar time = new GregorianCalendar();
+
+			// Date header
+			addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(time.getTimeInMillis()));
+
+			// Add cache headers
+			time.add(Calendar.SECOND, httpCacheSeconds);
+			addHeader(HttpHeaderNames.EXPIRES.toString(), dateFormatter.format(time.getTimeInMillis()));
+			addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "private, max-age=" + httpCacheSeconds);
+			addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), dateFormatter.format(itemLastModified));
+		}
+
+		@Override
+		public void setDynamicContentHeaders(String contentType) {
+			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+			// Date header
+			addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
+
+			addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache, no-store, must-revalidate");
+			addHeader(HttpHeaderNames.PRAGMA.toString(), "no-cache");
+			addHeader(HttpHeaderNames.EXPIRES.toString(), "0");
+		}
+
 
 		@Override
 		public String toString() {
@@ -723,12 +873,18 @@ public final class HttpServer {
 
 				} else if (msg instanceof FullHttpRequest) {
 					startRequest((FullHttpRequest)msg);
-					// The user may hold onto the objects passed in and choose to reply later.  If the user DOES NOT
-					// call one of the respond() methods in IHttpResponse we will leak the request
-					try {
-						m_requestHandler.onRequest(this, this);
-					} catch (Throwable t) {
-						LOG.warn("Uncaught exception from " + m_requestHandler.getClass().getName(), t);
+
+					if (!m_httpRequest.decoderResult().isSuccess()) {
+						respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
+
+					} else {
+						// The user may hold onto the objects passed in and choose to reply later.  If the user DOES NOT
+						// call one of the respond() methods in IHttpResponse we will leak the request
+						try {
+							m_requestHandler.onRequest(this, this);
+						} catch (Throwable t) {
+							LOG.warn("Uncaught exception from " + m_requestHandler.getClass().getName(), t);
+						}
 					}
 
 				} else if (msg instanceof DefaultFullHttpResponse) {
@@ -737,6 +893,7 @@ public final class HttpServer {
 						// The client disconnected, simply throw away the response
 						response.release();
 						m_earlyDisconnects.increment();
+						endRequest();
 
 					} else {
 						if (LOG.isDebugEnabled()) {
@@ -760,13 +917,64 @@ public final class HttpServer {
 								m_requestRate.record(requestTimer);
 							}
 							requestTimer.close();
+							// We are not going to trust the client to close the connection, so we will after we flush
+							if (shuttingDown) {
+								m_context.close();
+							}
+							endRequest();
 						});
-						// We are not going to trust the client to close the connection, so we will after we flush
-						if (shuttingDown) {
-							m_context.close();
-						}
 					}
-					endRequest();
+
+				} else if (msg instanceof DefaultHttpResponse) {
+					DefaultHttpResponse response = (DefaultHttpResponse) msg;
+					if (m_context != null) {
+						if (LOG.isDebugEnabled()) {
+							LOG.debug("[{}] write({})", m_connectionToString, response.status().code());
+						}
+						final boolean shuttingDown = (m_stopDonePromise != null);
+						// If we are shutting down, need to make sure we close the connection (after this request is sent)
+						if (shuttingDown) {
+							response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+						}
+						m_context.write(response);
+					}
+
+				} else if (msg instanceof HttpChunkedInput) {
+					HttpChunkedInput response = (HttpChunkedInput) msg;
+					if (m_context == null) {
+						// The client disconnected, simply throw away the response
+						try {
+							response.close();
+						} catch(Exception ex) {
+						}
+						m_earlyDisconnects.increment();
+						endRequest();
+
+					} else {
+						if (LOG.isDebugEnabled()) {
+							LOG.debug("[{}] writeAndFlush(<chunked data>)", m_connectionToString);
+						}
+						// Since this happens only once in a Connection and connections are created PER request,
+						// its ok to use the lambda here since it would be a wash to create a class to wrap it
+						final MetricsEngine.IMetricTimer requestTimer = m_requestTimer;
+						m_requestTimer = null;
+
+						m_context.writeAndFlush(response).addListener((f) -> {
+							if (requestTimer != null) {
+								if (f.isSuccess()) {
+									m_requestRate.record(requestTimer);
+								}
+								requestTimer.close();
+							}
+
+							// We are not going to trust the client to close the connection, so we will after we flush
+							final boolean shuttingDown = (m_stopDonePromise != null);
+							if (shuttingDown) {
+								m_context.close();
+							}
+							endRequest();
+						});
+					}
 
 				} else if (msg instanceof Throwable) {
 					// The user may hold onto the objects passed in and choose to reply later
@@ -875,8 +1083,14 @@ public final class HttpServer {
 	}
 	public interface IHttpResponse {
 		void addHeader(String key, String value);
+		void setStaticContentHeaders(long itemLastModified, String contentType, int httpCacheSeconds);
+		void setDynamicContentHeaders(String contentType);
+
 		void respondOk(ByteBuf data);
+		void respondOk(File file, int httpCacheSeconds);
 		void respond(HttpResponseStatus httpResponseStatus, ByteBuf data);
+		void respondNotModified();
+
 		void clearReadTimeout();
 		void updateReadTimeout(long newTimeoutInMS);
 	}
