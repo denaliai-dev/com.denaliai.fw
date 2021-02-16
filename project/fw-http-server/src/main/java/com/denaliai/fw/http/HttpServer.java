@@ -863,6 +863,8 @@ public final class HttpServer {
 			addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache, no-store, must-revalidate");
 			addHeader(HttpHeaderNames.PRAGMA.toString(), "no-cache");
 			addHeader(HttpHeaderNames.EXPIRES.toString(), "-1");
+
+			addHeader(HttpHeaderNames.CONTENT_TYPE.toString(), contentType);
 		}
 
 
