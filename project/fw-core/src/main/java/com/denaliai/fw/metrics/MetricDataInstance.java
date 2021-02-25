@@ -120,7 +120,7 @@ final class MetricDataInstance {
 		return true;
 	}
 
-	public boolean set(MinMaxAvgValueMetric m, int value) {
+	public boolean set(MinMaxAvgValueMetric m, long value) {
 		if (!lock()) {
 			return false;
 		}

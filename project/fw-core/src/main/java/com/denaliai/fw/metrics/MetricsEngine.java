@@ -215,7 +215,7 @@ public final class MetricsEngine {
 		}
 	}
 
-	static void set(MinMaxAvgValueMetric m, int value) {
+	static void set(MinMaxAvgValueMetric m, long value) {
 		MetricDataInstance data = MetricsEngine.current();
 		if (!data.set(m, value)) {
 			data = MetricsEngine.newDataInstance();
