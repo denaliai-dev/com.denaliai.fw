@@ -35,4 +35,25 @@ public class MinimalHTTPSRequest {
 		final SocketFactory factory = SSLSocketFactory.getDefault();
 		return MinimalHTTPRequest.get(factory, host, port, file, LOG);
 	}
+
+
+	public static String post(String urlString, String contentType, String postedData) {
+		return MinimalHTTPRequest.post(urlString, contentType, postedData);
+	}
+	public static String post(URL url, String contentType, String postedData) {
+		if (url.getProtocol() == "http") {
+			return MinimalHTTPRequest.post(url, contentType, postedData);
+		} else {
+			final int port = (url.getPort() == -1) ? 443 : url.getPort();
+			return post(url.getHost(), port, url.getFile(), contentType, postedData);
+		}
+	}
+	public static String post(String host, String file, String contentType, String postedData) {
+		return post(host, 443, file, contentType, postedData);
+	}
+	public static String post(String host, int port, String file, String contentType, String postedData) {
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPSRequest.class.getName() + "." + host);
+		final SocketFactory factory = SSLSocketFactory.getDefault();
+		return MinimalHTTPRequest.post(factory, host, port, file, LOG, contentType, postedData);
+	}
 }
