@@ -4,6 +4,7 @@ public class MinMaxAvgValueMetric extends MetricBase {
 	private final String m_consumerKey_Avg;
 	private final String m_consumerKey_Min;
 	private final String m_consumerKey_Max;
+	private final String m_consumerKey_Count;
 	final int initIndex;
 	final int indexOfCount;
 	final int indexOfTotal;
@@ -23,6 +24,7 @@ public class MinMaxAvgValueMetric extends MetricBase {
 		m_consumerKey_Avg = name + ".avg";
 		m_consumerKey_Min = name + ".min";
 		m_consumerKey_Max = name + ".max";
+		m_consumerKey_Count = name + ".count";
 	}
 
 	public void set(long value) {
@@ -69,10 +71,12 @@ public class MinMaxAvgValueMetric extends MetricBase {
 			consumer.apply(m_consumerKey_Avg, 0L);
 			consumer.apply(m_consumerKey_Min, 0L);
 			consumer.apply(m_consumerKey_Max, 0L);
+			consumer.apply(m_consumerKey_Count, 0L);
 		} else {
 			consumer.apply(m_consumerKey_Avg, snapshotData[indexOfTotal] / snapshotData[indexOfCount]);
 			consumer.apply(m_consumerKey_Min, snapshotData[indexOfMin]);
 			consumer.apply(m_consumerKey_Max, snapshotData[indexOfMax]);
+			consumer.apply(m_consumerKey_Count, snapshotData[indexOfCount]);
 		}
 	}
 }
