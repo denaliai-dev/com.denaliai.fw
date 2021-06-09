@@ -16,6 +16,7 @@ import io.netty.util.concurrent.Promise;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 public class Application {
@@ -113,7 +114,25 @@ public class Application {
 		final Logger LOG = LoggerFactory.getLogger(Application.class);
 		final String ver = Application.class.getPackage().getImplementationVersion();
 		if (ver != null) {
-			LOG.info("Starting ({})", ver);
+			String callerVer = "";
+			final StackTraceElement[] stack = (new Throwable()).getStackTrace();
+			if (stack != null) {
+				for (int i = 0; i < stack.length; i++) {
+					StackTraceElement el = stack[i];
+					if (!el.getClassName().startsWith("com.denaliai.fw")) {
+						try {
+							Class<?> clazz = Application.class.getClassLoader().loadClass(el.getClassName());
+							String cv = clazz.getPackage().getImplementationVersion();
+							if (cv != null) {
+								callerVer = cv + " ";
+							}
+						} catch(Throwable t) {
+						}
+						break;
+					}
+				}
+			}
+			LOG.info("Starting {}({})", callerVer, ver);
 		} else {
 			LOG.info("Starting");
 		}
