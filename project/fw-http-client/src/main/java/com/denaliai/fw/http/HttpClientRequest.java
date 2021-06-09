@@ -173,6 +173,7 @@ public class HttpClientRequest {
 		if (m_headers == null) {
 			m_headers = new ArrayList<>();
 			m_headers.add(new NameValue(name, value));
+			return;
 		}
 		for(int i=0; i<m_headers.size(); i++) {
 			NameValue nv = m_headers.get(i);

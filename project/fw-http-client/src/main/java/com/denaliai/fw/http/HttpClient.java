@@ -43,8 +43,13 @@ public class HttpClient {
 	private AtomicInteger m_requestsDone = new AtomicInteger();
 	private Integer m_maxConnectionsPerHost = Config_MaxConnectionsPerHost;
 	private Boolean m_keepAlive = Config_KeepAlive;
+	private Boolean m_useInsecureTrustManager;
 
 	public HttpClient() {
+	}
+
+	public void useInsecureTrustManager(boolean value) {
+		m_useInsecureTrustManager = value;
 	}
 
 	public void setMaxConnectionsPerHost(int num) {
@@ -263,8 +268,7 @@ public class HttpClient {
 			// .addResponseFilter(responseFilter) allow retry on certain HTTP statuses (or no HTTP status)
 			// .setEnabledProtocols(enabledProtocols)
 			// .setEnabledCipherSuites(enabledCipherSuites)
-
-			// .setDisableHttpsEndpointIdentificationAlgorithm(disableHttpsEndpointIdentificationAlgorithm)
+			// .setDisableHttpsEndpointIdentificationAlgorithm(disableHttpsEndpointIdentificationAlgorithm);
 			// .setFilterInsecureCipherSuites(filterInsecureCipherSuites)
 			// .setHandshakeTimeout(handshakeTimeout)
 			// .setSslSessionTimeout(sslSessionTimeout)
@@ -279,6 +283,9 @@ public class HttpClient {
 			}
 			if (m_keepAlive != null) {
 				dsl.setKeepAlive(m_keepAlive);
+			}
+			if (m_useInsecureTrustManager != null) {
+				dsl.setUseInsecureTrustManager(m_useInsecureTrustManager);
 			}
 
 			if (LOG.isDebugEnabled()) {
