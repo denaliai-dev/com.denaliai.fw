@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.net.*;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import javax.net.SocketFactory;
 
@@ -17,10 +18,10 @@ public class MinimalHTTPRequest {
 	private MinimalHTTPRequest() {
 	}
 
-	// TODO need to add optional headers to GET
-	// TODO need to add POST
-
 	public static String get(String urlString) {
+		return get(urlString, (Map<String, String>)null);
+	}
+	public static String get(String urlString, final Map<String, String> headers) {
 		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName());
 		final URL url;
 		try {
@@ -29,29 +30,44 @@ public class MinimalHTTPRequest {
 			LOG.error("", e);
 			throw new IllegalArgumentException("Could not parse URL '" + urlString + "'", e);
 		}
-		return get(url);
+		return get(url, headers);
 	}
 	public static String get(URL url) {
+		return get(url, null);
+	}
+	public static String get(URL url, final Map<String, String> headers) {
 		if (url.getProtocol().equals("https")) {
-			return MinimalHTTPSRequest.get(url);
+			return MinimalHTTPSRequest.get(url, headers);
 		} else {
 			final int port = (url.getPort() == -1) ? 80 : url.getPort();
-			return get(url.getHost(), port, url.getFile());
+			return get(url.getHost(), port, url.getFile(), headers);
 		}
 	}
 	public static String get(String host, String file) {
 		return get(host, 80, file);
 	}
+	public static String get(String host, String file, final Map<String, String> headers) {
+		return get(host, 80, file, headers);
+	}
 	public static String get(String host, int port, String file) {
+		return get(host, port, file, null);
+	}
+	public static String get(String host, int port, String file, final Map<String, String> headers) {
 		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName() + "." + host);
 		final SocketFactory factory = SocketFactory.getDefault();
-		return execute(factory, "GET", host, port, file, 15000, LOG, null, null);
+		return execute(factory, "GET", host, port, file, 15000, LOG, null, headers, null);
 	}
 	static String get(final SocketFactory factory, String host, int port, String file, final Logger LOG) {
-		return execute(factory, "GET", host, port, file, 15000, LOG, null, null);
+		return execute(factory, "GET", host, port, file, 15000, LOG, null, null, null);
+	}
+	static String get(final SocketFactory factory, String host, int port, String file, final Map<String, String> headers, final Logger LOG) {
+		return execute(factory, "GET", host, port, file, 15000, LOG, null, headers, null);
 	}
 
 	public static String post(String urlString, String contentType, String postedData) {
+		return post(urlString, contentType, (Map<String, String>)null, postedData);
+	}
+	public static String post(String urlString, String contentType, final Map<String, String> headers, String postedData) {
 		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName());
 		final URL url;
 		try {
@@ -71,19 +87,28 @@ public class MinimalHTTPRequest {
 		}
 	}
 	public static String post(String host, String file, String contentType, String postedData) {
-		return post(host, 80, file, contentType, postedData);
+		return post(host, file, contentType, postedData);
+	}
+	public static String post(String host, String file, String contentType, final Map<String, String> headers, String postedData) {
+		return post(host, 80, file, contentType, headers, postedData);
 	}
 	public static String post(String host, int port, String file, String contentType, String postedData) {
+		return post(host, port, file, contentType, null, postedData);
+	}
+	public static String post(String host, int port, String file, String contentType, final Map<String, String> headers, String postedData) {
 		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName() + "." + host);
 		final SocketFactory factory = SocketFactory.getDefault();
-		return execute(factory, "POST", host, port, file, 15000, LOG, contentType, postedData);
+		return execute(factory, "POST", host, port, file, 15000, LOG, contentType, headers, postedData);
 	}
 	static String post(final SocketFactory factory, String host, int port, String file, final Logger LOG, String contentType, String postedData) {
-		return execute(factory, "POST", host, port, file, 15000, LOG, contentType, postedData);
+		return execute(factory, "POST", host, port, file, 15000, LOG, contentType, null, postedData);
+	}
+	static String post(final SocketFactory factory, String host, int port, String file, final Logger LOG, String contentType, final Map<String, String> headers, String postedData) {
+		return execute(factory, "POST", host, port, file, 15000, LOG, contentType, headers, postedData);
 	}
 
 
-	static String execute(final SocketFactory factory, String method, String host, int port, String file, final int readTimeoutInMS, final Logger LOG, final String contentType, final String postedData) {
+	static String execute(final SocketFactory factory, String method, String host, int port, String file, final int readTimeoutInMS, final Logger LOG, final String contentType, final Map<String, String> headers, final String postedData) {
 		final StringBuilder responseBuilder = new StringBuilder(8096);
 		final InetAddress addr;
 		try {
@@ -116,6 +141,11 @@ public class MinimalHTTPRequest {
 						request.append(':').append(port);
 					}
 					request.append("\r\n");
+					if (headers != null) {
+						for(Map.Entry<String, String> e : headers.entrySet()) {
+							request.append(e.getKey()).append(": ").append(e.getValue()).append("\r\n");
+						}
+					}
 					if (postedData != null) {
 						request.append("Content-Type: ").append(contentType).append("\r\n");
 						request.append("Content-Length: ").append(postedDataBytes.length).append("\r\n");
