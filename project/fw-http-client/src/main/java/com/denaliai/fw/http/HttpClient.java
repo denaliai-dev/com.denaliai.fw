@@ -324,24 +324,26 @@ public class HttpClient {
 				LOG.debug("[{}] Request complete", m_requestId);
 			}
 			try {
+				Exception httpException = null;
 				try {
 					m_response = m_responseFuture.get();
 				} catch(Exception ex) {
 					if (LOG.isDebugEnabled()) {
 						LOG.info("HTTP processing exception", ex);
 					}
+					httpException = ex;
 					m_response = null;
 				}
 				// m_response could be null if there is no Http status (any kind of protocol failure)
 				if (m_response == null) {
 					if (m_request.getFailedHandler() != null) {
 						try {
-							m_request.getFailedHandler().requestFailed(new HttpRequestFailureException("A protocol failure or I/O exception occurred during the processing of the request, turn on debug logging for " + HttpClient.class.getCanonicalName() + " to get the details"));
+							m_request.getFailedHandler().requestFailed(new HttpRequestFailureException("A protocol failure or I/O exception occurred during the processing of the request", httpException));
 						} catch(Exception ex2) {
 							LOG.error("Unexpected exception in user callback", ex2);
 						}
 					} else {
-						LOG.info("[{}] A protocol failure or I/O exception occurred during the processing of the request, turn on debug logging for {} to get the details", m_requestId, HttpClient.class.getCanonicalName());
+						LOG.info("[{}] A protocol failure or I/O exception occurred during the processing of the request", m_requestId, httpException);
 					}
 					m_requestFailures.increment();
 
