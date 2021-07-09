@@ -227,6 +227,42 @@ public abstract class JSONSerializer {
 		public void writeJson(ByteBuf dest) {
 			dest.writeCharSequence("null", StandardCharsets.US_ASCII);
 		}
+
+		@Override
+		public ObjectNode asObject() throws JsonUseException {
+			throw new JsonUseException("Node is null and not a JSON object");
+		}
+
+		@Override
+		public StringNode asString() throws JsonUseException {
+			throw new JsonUseException("Node is null and not a JSON string");
+		}
+
+		@Override
+		public NumericNode asNumeric() throws JsonUseException {
+			throw new JsonUseException("Node is null and not a JSON number");
+		}
+
+		@Override
+		public IntegerNode asInteger() throws JsonUseException {
+			throw new JsonUseException("Node is null and not a JSON integer");
+		}
+
+		@Override
+		public FloatingNode asFloating() throws JsonUseException {
+			throw new JsonUseException("Node is null and not a JSON floating point number");
+		}
+
+		@Override
+		public ArrayNode asArray() throws JsonUseException {
+			throw new JsonUseException("Node is null and not a JSON array");
+		}
+
+		@Override
+		public BooleanNode asBoolean() throws JsonUseException {
+			throw new JsonUseException("Node is null and not a JSON boolean");
+		}
+
 	}
 
 	public static final class StringNode extends Node {
