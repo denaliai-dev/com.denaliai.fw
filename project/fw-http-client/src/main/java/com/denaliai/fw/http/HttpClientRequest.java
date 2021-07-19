@@ -148,6 +148,9 @@ public class HttpClientRequest {
 	public Integer requestTimeout() {
 		return m_requestTimeout;
 	}
+	public void requestTimeout(Integer timeout) {
+		m_requestTimeout = timeout;
+	}
 	public Integer readTimeout() {
 		return m_readTimeout;
 	}
