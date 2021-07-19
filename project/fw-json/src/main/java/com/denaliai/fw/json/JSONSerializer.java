@@ -70,7 +70,14 @@ public abstract class JSONSerializer {
 				}
 			} else if (token.isNumeric()) {
 				if (token == JsonToken.VALUE_NUMBER_INT) {
-					node.add(fieldName, new IntegerNode(parser.getLongValue()));
+					Node newNode;
+					try {
+						newNode = new IntegerNode(parser.getLongValue());
+					} catch(com.fasterxml.jackson.core.JsonParseException ex) {
+						// JSON can contain integer values greater than the size of a Java long, so treat those as Strings for now
+						newNode = new StringNode(parser.getText());
+					}
+					node.add(fieldName, newNode);
 				} else {
 					node.add(fieldName, new FloatingNode(parser.getDoubleValue()));
 				}
