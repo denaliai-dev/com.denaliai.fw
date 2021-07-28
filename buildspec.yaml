@@ -13,7 +13,7 @@ phases:
     commands:
       - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain denaliai --domain-owner 896222864287 --query authorizationToken --output text`
       - mvn -s aws_mvn_settings.xml install
-			
+
   post_build:
     commands:
       - mvn -s aws_mvn_settings.xml deploy
