@@ -76,4 +76,12 @@
 		</profile>
   </profiles>
 
+	<distributionManagement>
+	  <repository>
+	    <id>denaliai-com.denaliai</id>
+	    <name>denaliai-com.denaliai</name>
+	    <url>https://denaliai-896222864287.d.codeartifact.us-east-1.amazonaws.com/maven/com.denaliai/</url>
+	  </repository>
+	</distributionManagement>
+
 </project>

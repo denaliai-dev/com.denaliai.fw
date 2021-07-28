@@ -1,0 +1,15 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: openjdk8
+
+  pre_build:
+    commands:
+      - pip3 install awscli --upgrade --user
+
+  build:
+    commands:
+      - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain denaliai --domain-owner 896222864287 --query authorizationToken --output text`
+      - mvn -s aws_mvn_settings.xml clean package deploy
