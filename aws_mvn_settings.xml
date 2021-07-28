@@ -11,6 +11,7 @@
 	    <password>${env.CODEARTIFACT_AUTH_TOKEN}</password>
 	  </server>
 	</servers>
+<!--
 	<mirrors>
 	  <mirror>
 	    <id>denaliai-com.denaliai</id>
@@ -19,6 +20,7 @@
 	    <mirrorOf>*</mirrorOf>
 	  </mirror>
 	</mirrors>	
+-->
 	<proxies/>
 	<profiles>
 	  <profile>
