@@ -16,4 +16,4 @@ phases:
 
   post_build:
     commands:
-      - mvn -s aws_mvn_settings.xml deploy
+      - mvn -s aws_mvn_settings.xml -DskipTests=true -Dskip.unit.tests=true deploy

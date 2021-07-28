@@ -77,11 +77,11 @@
   </profiles>
 
 	<distributionManagement>
-	  <repository>
-	    <id>denaliai-com.denaliai</id>
-	    <name>denaliai-com.denaliai</name>
-	    <url>https://denaliai-896222864287.d.codeartifact.us-east-1.amazonaws.com/maven/com.denaliai/</url>
-	  </repository>
-	</distributionManagement>
+	    <repository>
+	      <id>github</id>
+	      <name>GitHub Packages</name>
+	      <url>https://maven.pkg.github.com/denaliai-dev/com.denaliai.fw</url>
+	    </repository>
+	  </distributionManagement>
 
 </project>
