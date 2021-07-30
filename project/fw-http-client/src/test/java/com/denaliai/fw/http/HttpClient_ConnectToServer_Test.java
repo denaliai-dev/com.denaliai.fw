@@ -44,10 +44,10 @@ public class HttpClient_ConnectToServer_Test extends AbstractTestBase {
 				response.respondOk(ByteBufUtil.writeAscii(Application.ioBufferAllocator(), "GOOD"));
 			})
 			.build();
-		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(1000));
+		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(5000));
 
 		HttpClient client = new HttpClient();
-		Assertions.assertTrue(client.start().awaitUninterruptibly(1000));
+		Assertions.assertTrue(client.start().awaitUninterruptibly(5000));
 
 		LinkedList<Promise<String>> promises = new LinkedList<>();
 		for(int i=0; i<16; i++) {
@@ -72,12 +72,12 @@ public class HttpClient_ConnectToServer_Test extends AbstractTestBase {
 			client.submit(req);
 		}
 		for(Promise<String> responsePromise : promises) {
-			Assertions.assertTrue(responsePromise.awaitUninterruptibly(1000));
+			Assertions.assertTrue(responsePromise.awaitUninterruptibly(5000));
 			Assertions.assertEquals("GOOD", responsePromise.getNow());
 		}
 
-		Assertions.assertTrue(client.stop().awaitUninterruptibly(1000));
-		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(1000));
+		Assertions.assertTrue(client.stop().awaitUninterruptibly(5000));
+		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(5000));
 
 		TestUtils.snapshotAndPrintCounters();
 	}

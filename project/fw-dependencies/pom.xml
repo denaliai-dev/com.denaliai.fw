@@ -17,7 +17,7 @@
     <properties>
         <!-- Dependency versions -->
         <jackson.version>2.9.7</jackson.version>
-        <log4j2.version>2.11.1</log4j2.version>
+        <log4j2.version>2.13.2</log4j2.version>
         <slf4j.version>1.7.25</slf4j.version>
         <junit-jupiter.version>5.5.1</junit-jupiter.version>
         <netty.version>4.1.42.Final</netty.version>
