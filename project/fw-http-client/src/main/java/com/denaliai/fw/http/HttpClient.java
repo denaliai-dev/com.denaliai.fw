@@ -41,11 +41,17 @@ public class HttpClient {
 	private volatile boolean m_requestStop;
 	private Queue<HttpClientRequest> m_requestQueue = PlatformDependent.newMpscQueue();
 	private AtomicInteger m_requestsDone = new AtomicInteger();
+	private Integer m_connectionTTL = null;
 	private Integer m_maxConnectionsPerHost = Config_MaxConnectionsPerHost;
 	private Boolean m_keepAlive = Config_KeepAlive;
 	private Boolean m_useInsecureTrustManager;
 
 	public HttpClient() {
+	}
+
+	//
+	public void setMaxConnectionTTL(int ttl) {
+		m_connectionTTL = ttl;
 	}
 
 	public void useInsecureTrustManager(boolean value) {
@@ -286,6 +292,9 @@ public class HttpClient {
 			}
 			if (m_useInsecureTrustManager != null) {
 				dsl.setUseInsecureTrustManager(m_useInsecureTrustManager);
+			}
+			if (m_connectionTTL != null) {
+				dsl.setConnectionTtl(m_connectionTTL);
 			}
 
 			if (LOG.isDebugEnabled()) {
