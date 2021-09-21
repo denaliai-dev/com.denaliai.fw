@@ -12,6 +12,10 @@ public class CounterMetric extends SingleIndexMetricBase {
 		MetricsEngine.increment(index);
 	}
 
+	public void add(long value) {
+		MetricsEngine.increment(index);
+	}
+
 	@Override
 	void report(long[] snapshotData, long snapshotDurationInNS, MetricsEngine.ISnapshotConsumer consumer) {
 		consumer.apply(m_consumerKey_Count, snapshotData[index]);

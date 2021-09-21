@@ -83,6 +83,19 @@ final class MetricDataInstance {
 		return true;
 	}
 
+	public boolean add(int index, long value) {
+		if (!lock()) {
+			return false;
+		}
+		if (index >= m_data.length) {
+			// The caller was loaded AFTER this data instance was created, we can only ignore the data for now
+			resizeData();
+		}
+		m_data[index]+=value;
+		unlock();
+		return true;
+	}
+
 	public boolean decrement(int index) {
 		if (!lock()) {
 			return false;

@@ -235,6 +235,16 @@ public final class MetricsEngine {
 		}
 	}
 
+	static void add(int index, long value) {
+		MetricDataInstance data = MetricsEngine.current();
+		if (!data.increment(index)) {
+			data = MetricsEngine.newDataInstance();
+			if (!data.increment(index)) {
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+			}
+		}
+	}
+
 	static void decrement(int index) {
 		MetricDataInstance data = MetricsEngine.current();
 		if (!data.decrement(index)) {
