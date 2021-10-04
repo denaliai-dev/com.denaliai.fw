@@ -205,16 +205,6 @@ public final class MetricsEngine {
 //		// A locked inst (whether current or new) is in the TLS slot, so we are good to use it
 //	}
 
-	static void add(int index, int value) {
-		MetricDataInstance data = MetricsEngine.current();
-		if (!data.add(index, value)) {
-			data = MetricsEngine.newDataInstance();
-			if (!data.add(index, value)) {
-				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
-			}
-		}
-	}
-
 	static void set(MinMaxAvgValueMetric m, long value) {
 		MetricDataInstance data = MetricsEngine.current();
 		if (!data.set(m, value)) {
@@ -237,9 +227,9 @@ public final class MetricsEngine {
 
 	static void add(int index, long value) {
 		MetricDataInstance data = MetricsEngine.current();
-		if (!data.increment(index)) {
+		if (!data.add(index, value)) {
 			data = MetricsEngine.newDataInstance();
-			if (!data.increment(index)) {
+			if (!data.add(index, value)) {
 				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
 			}
 		}

@@ -13,7 +13,7 @@ public class CounterMetric extends SingleIndexMetricBase {
 	}
 
 	public void add(long value) {
-		MetricsEngine.increment(index);
+		MetricsEngine.add(index, value);
 	}
 
 	@Override
