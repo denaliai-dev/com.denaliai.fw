@@ -20,7 +20,11 @@ public class TempBlockingQueue<T> implements BlockingQueue<T> {
 	private final Semaphore m_itemsSemaphore = new Semaphore(0, false);
 
 	public TempBlockingQueue(int capacity) {
-		m_queue = PlatformDependent.newFixedMpscQueue(4096);
+		if (capacity == Integer.MAX_VALUE) {
+			m_queue = PlatformDependent.newMpscQueue();
+		} else {
+			m_queue = PlatformDependent.newFixedMpscQueue(capacity);
+		}
 	}
 
 	@Override

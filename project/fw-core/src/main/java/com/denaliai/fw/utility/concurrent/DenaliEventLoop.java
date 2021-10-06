@@ -3,6 +3,7 @@ package com.denaliai.fw.utility.concurrent;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.SingleThreadEventLoop;
 import io.netty.util.concurrent.DefaultThreadFactory;
+import io.netty.util.internal.PlatformDependent;
 
 import java.util.Queue;
 import java.util.concurrent.Executor;
