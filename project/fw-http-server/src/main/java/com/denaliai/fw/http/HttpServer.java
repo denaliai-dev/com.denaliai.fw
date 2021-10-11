@@ -560,15 +560,16 @@ public final class HttpServer {
 	private final class Connection extends PerpetualWork implements ISocketConnection, IHttpRequest, IHttpResponse {
 		private final Queue<Object> m_msgQueue = PlatformDependent.newMpscQueue();
 		private final String m_connectionToString;
-		private Channel m_channel;
+		private volatile Channel m_channel;
 
-		private ChannelHandlerContext m_context;
+		private volatile ChannelHandlerContext m_context;
 		private MetricsEngine.IMetricTimer m_requestTimer;
 		private HttpVersion m_httpRequestProtocolVersion;
 		private HttpMethod m_httpRequestMethod;
 		private FullHttpRequest m_httpRequest;
 		private Map<String,String> m_responseHeaders;
 		private boolean m_updatedReadTimeout;
+		private volatile boolean m_flushing;
 
 		Connection(String connectionToString, Channel channel) {
 			m_connectionToString = connectionToString;
@@ -901,6 +902,9 @@ public final class HttpServer {
 
 		@Override
 		protected void _doWork() {
+			if (m_flushing) {
+				return;
+			}
 			while (true) {
 				Object msg = m_msgQueue.poll();
 				if (msg == null) {
@@ -964,19 +968,27 @@ public final class HttpServer {
 						if (shuttingDown) {
 							response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
 						}
-						m_context.writeAndFlush(response).addListener((f) -> {
+						ChannelFuture  flushFuture = m_context.writeAndFlush(response);
+						m_flushing = true;
+						flushFuture.addListener((f) -> {
 							if (requestTimer == null) {
+								m_flushing = false;
 								return;
 							}
-							if (f.isSuccess()) {
-								m_requestRate.record(requestTimer);
+							try {
+								if (f.isSuccess()) {
+									m_requestRate.record(requestTimer);
+								}
+								requestTimer.close();
+								// We are not going to trust the client to close the connection, so we will after we flush
+								if (shuttingDown) {
+									m_context.close();
+								}
+								endRequest();
+							} finally {
+								m_flushing = false;
+								requestMoreWork();
 							}
-							requestTimer.close();
-							// We are not going to trust the client to close the connection, so we will after we flush
-							if (shuttingDown) {
-								m_context.close();
-							}
-							endRequest();
 						});
 					}
 
