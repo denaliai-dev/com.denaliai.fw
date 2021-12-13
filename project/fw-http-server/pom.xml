@@ -23,6 +23,11 @@
 			<artifactId>fw-core</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>javax.activation</groupId>
+			<artifactId>activation</artifactId>
+			<version>1.1.1</version>
+		</dependency>
+		<dependency>
 			<groupId>com.denaliai.fw</groupId>
 			<artifactId>fw-core-test</artifactId>
 			<scope>test</scope>

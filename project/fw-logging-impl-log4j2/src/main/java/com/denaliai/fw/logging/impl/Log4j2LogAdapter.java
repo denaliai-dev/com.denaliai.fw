@@ -19,6 +19,7 @@ public class Log4j2LogAdapter implements ILoggingImplementation {
 		String userFile = System.getProperty("log4j.appConfigurationFile");
 
 		System.setProperty("java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager");
+		System.setProperty("log4j2.formatMsgNoLookups", "true");
 		System.setProperty("log4j2.disableJmx", "true");
 		if (userFile != null) {
 			System.setProperty("log4j.configurationFile", "core-log4j2.xml," + userFile);
