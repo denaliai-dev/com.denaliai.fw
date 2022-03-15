@@ -164,6 +164,16 @@ public class Application {
 		}
 	}
 
+	public static void haltImmediately() {
+		try {
+			final Logger LOG = LoggerFactory.getLogger(Application.class);
+			LOG.info("Immediately halting the application");
+		} catch(Throwable t) {
+		}
+		// Immediately terminate the process
+		Runtime.getRuntime().halt(1);
+	}
+
 	private static void terminate0() {
 		if (!ApplicationRun.indicateTermination()) {
 			return;
