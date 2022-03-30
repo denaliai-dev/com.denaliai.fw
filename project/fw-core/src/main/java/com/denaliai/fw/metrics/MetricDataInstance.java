@@ -83,6 +83,19 @@ final class MetricDataInstance {
 		return true;
 	}
 
+	public boolean set(int index, long value) {
+		if (!lock()) {
+			return false;
+		}
+		if (index >= m_data.length) {
+			// The caller was loaded AFTER this data instance was created, we can only ignore the data for now
+			resizeData();
+		}
+		m_data[index] = value;
+		unlock();
+		return true;
+	}
+
 	public boolean decrement(int index) {
 		if (!lock()) {
 			return false;
@@ -120,6 +133,28 @@ final class MetricDataInstance {
 		return true;
 	}
 
+	public boolean set(MinMaxValueMetric m, long value) {
+		if (!lock()) {
+			return false;
+		}
+		if (m.indexOfMax >= m_data.length) {
+			// The caller was loaded AFTER this data instance was created, we can only ignore the data for now
+			resizeData();
+		}
+		if (m_data[m.initIndex] == 0) {
+			m.resetDataForNextSnapshot(m_data);
+		}
+		m_data[m.initIndex] = 2; // This indicates that there are values written
+		if (value < m_data[m.indexOfMin]) {
+			m_data[m.indexOfMin] = value;
+		}
+		if (value > m_data[m.indexOfMax]) {
+			m_data[m.indexOfMax] = value;
+		}
+		unlock();
+		return true;
+	}
+
 	public boolean set(MinMaxAvgValueMetric m, long value) {
 		if (!lock()) {
 			return false;
@@ -142,4 +177,5 @@ final class MetricDataInstance {
 		unlock();
 		return true;
 	}
+
 }

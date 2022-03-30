@@ -74,6 +74,12 @@ public final class MetricsEngine {
 		return m;
 	}
 
+	public synchronized static MinMaxValueMetric newMinMaxValueMetric(String name) {
+		MinMaxValueMetric m = new MinMaxValueMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++);
+		m_metrics.add(m);
+		return m;
+	}
+
 	private synchronized static List<MetricBase> currentMetrics() {
 		return new ArrayList<>(m_metrics);
 	}
@@ -205,7 +211,27 @@ public final class MetricsEngine {
 //		// A locked inst (whether current or new) is in the TLS slot, so we are good to use it
 //	}
 
+	static void set(int index, long value) {
+		MetricDataInstance data = MetricsEngine.current();
+		if (!data.set(index, value)) {
+			data = MetricsEngine.newDataInstance();
+			if (!data.set(index, value)) {
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+			}
+		}
+	}
+
 	static void set(MinMaxAvgValueMetric m, long value) {
+		MetricDataInstance data = MetricsEngine.current();
+		if (!data.set(m, value)) {
+			data = MetricsEngine.newDataInstance();
+			if (!data.set(m, value)) {
+				LoggerFactory.getLogger(MetricsEngine.class).error("Failed to lock new instance!");
+			}
+		}
+	}
+
+	static void set(MinMaxValueMetric m, long value) {
 		MetricDataInstance data = MetricsEngine.current();
 		if (!data.set(m, value)) {
 			data = MetricsEngine.newDataInstance();
