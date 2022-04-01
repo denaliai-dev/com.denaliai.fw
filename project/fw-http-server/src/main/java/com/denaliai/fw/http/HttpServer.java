@@ -891,7 +891,11 @@ public final class HttpServer {
 			if (m_updatedReadTimeout) {
 				// Replace read timeout with default
 				m_updatedReadTimeout = false;
-				m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(m_readTimeoutInMS, TimeUnit.MILLISECONDS));
+				try {
+					m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(m_readTimeoutInMS, TimeUnit.MILLISECONDS));
+				} catch(Exception ex) {
+					LOG.error("Missing read-timeout handler, perhaps the channel is closed? Active={} Open={}", m_channel.isActive(), m_channel.isOpen(), ex);
+				}
 			}
 		}
 
