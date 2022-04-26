@@ -14,6 +14,9 @@ public class TotalCounterMetric extends SingleIndexMetricBase {
 	public void decrement() {
 		MetricsEngine.decrement(index);
 	}
+	public void add(int value) {
+		MetricsEngine.add(index, value);
+	}
 
 	@Override
 	void resetDataForNextSnapshot(long[] snapshotData) {

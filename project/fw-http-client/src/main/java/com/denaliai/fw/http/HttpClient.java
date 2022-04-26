@@ -13,9 +13,12 @@ import io.netty.util.concurrent.Promise;
 import io.netty.util.internal.PlatformDependent;
 import org.asynchttpclient.*;
 import org.asynchttpclient.netty.LazyResponseBodyPart;
+import org.asynchttpclient.netty.ssl.JsseSslEngineFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
+import java.security.NoSuchAlgorithmException;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -255,7 +258,7 @@ public class HttpClient {
 			}
 		}
 
-		private void _start() {
+		private void _start() throws NoSuchAlgorithmException {
 			DefaultAsyncHttpClientConfig.Builder dsl = Dsl.config()
 				.setEventLoopGroup(Application.getIOPool())
 				.setAllocator(Application.allocator())
@@ -279,7 +282,6 @@ public class HttpClient {
 			// .setHandshakeTimeout(handshakeTimeout)
 			// .setSslSessionTimeout(sslSessionTimeout)
 			// .setStrict302Handling(strict302Handling)
-			// .setUseInsecureTrustManager(useInsecureTrustManager)
 			// .setUseNativeTransport(useNativeTransport)
 			if (Config_MaxConnections != null) {
 				dsl.setMaxConnections(Config_MaxConnections);
