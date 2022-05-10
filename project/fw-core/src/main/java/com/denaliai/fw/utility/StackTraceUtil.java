@@ -29,10 +29,15 @@ java.io.FileNotFoundException: /logs/694445a17176-test/geo-v1-1499535983811 (No 
 public class StackTraceUtil {
 	public static String stackTraceToString(Throwable t) {
 		final StringBuilder writer = new StringBuilder();
-		_stackTraceToString(writer, t);
+		_stackTraceToString(writer, t, 100*1024);
 		return writer.toString();
 	}
-	private static void _stackTraceToString(StringBuilder writer, Throwable t) {
+	public static String stackTraceToString(Throwable t, int maxSize) {
+		final StringBuilder writer = new StringBuilder();
+		_stackTraceToString(writer, t, maxSize);
+		return writer.toString();
+	}
+	private static void _stackTraceToString(StringBuilder writer, Throwable t, int maxSize) {
 
 		writer.append(t.getClass().getName()).append(": ").append(t.getMessage()).append("\n");
 
@@ -40,10 +45,14 @@ public class StackTraceUtil {
 		for(int i=0; i<stack.length; i++) {
 			StackTraceElement el = stack[i];
 			writer.append("\tat ").append(el.toString()).append("\n");
+			if (writer.length() >= maxSize) {
+				writer.append("...truncated...\n");
+				return;
+			}
 		}
 		if (t.getCause() != null) {
 			writer.append("Caused by ");
-			_stackTraceToString(writer, t.getCause());
+			_stackTraceToString(writer, t.getCause(), maxSize);
 		}
 	}
 
