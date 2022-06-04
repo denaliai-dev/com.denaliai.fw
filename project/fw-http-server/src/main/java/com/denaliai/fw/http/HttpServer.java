@@ -555,36 +555,19 @@ public final class HttpServer {
 	private static final Object m_onConnect = new Object();
 	private static final Object m_onDisconnect = new Object();
 
-	// TODO consider making this recylced
-	// TODO need to increment/decrement a latch-like thing to keep the server running until this guy is all done doing his thing
-	private final class Connection extends PerpetualWork implements ISocketConnection, IHttpRequest, IHttpResponse {
+	private final class Connection extends PerpetualWork implements ISocketConnection {
 		private final Queue<Object> m_msgQueue = PlatformDependent.newMpscQueue();
 		private final String m_connectionToString;
 		private volatile Channel m_channel;
 
+		private volatile UserRequestState m_currentRequest;
 		private volatile ChannelHandlerContext m_context;
-		private MetricsEngine.IMetricTimer m_requestTimer;
-		private HttpVersion m_httpRequestProtocolVersion;
-		private HttpMethod m_httpRequestMethod;
-		private FullHttpRequest m_httpRequest;
-		private Map<String,String> m_responseHeaders;
+
 		private boolean m_updatedReadTimeout;
-		private volatile boolean m_flushing;
 
 		Connection(String connectionToString, Channel channel) {
 			m_connectionToString = connectionToString;
 			m_channel = channel;
-		}
-
-//		private void updateReadTimeout(long readTimeoutInMS) {
-//			m_updatedReadTimeout = true;
-//			m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(readTimeoutInMS, TimeUnit.MILLISECONDS));
-//		}
-
-		private void clearReadTimeout() {
-			m_updatedReadTimeout = true;
-			// Need to leave the handler in its place, so replace it with something that does nothing
-			m_channel.pipeline().replace("read-timeout", "read-timeout", new IdleStateHandler(0, 0, 0));
 		}
 
 		void callOnConnect() {
@@ -608,287 +591,18 @@ public final class HttpServer {
 			requestMoreWork();
 		}
 
-		@Override
-		public String remoteHostAddress() {
-			return m_connectionToString;
-		}
-
-		/*
-			IHttpRequest
-		*/
-		@Override
-		public String requestMethod() {
-			return m_httpRequestMethod.name();
-		}
-
-		@Override
-		public String requestURI() {
-			return m_httpRequest.uri();
-		}
-
-		@Override
-		public String headerValue(String name) {
-			return m_httpRequest.headers().get(name);
-		}
-
-		@Override
-		public ByteBuf data() {
-			return m_httpRequest.content();
-		}
-
-		/*
-			IHttpResponse
-		*/
-
-		@Override
-		public void addHeader(String key, String value) {
-			if (m_responseHeaders == null) {
-				m_responseHeaders = new HashMap<>();
-			}
-			m_responseHeaders.put(key, value);
-		}
-
-		@Override
-		public void respondOk(ByteBuf data) {
-			respond(HttpResponseStatus.OK, data);
-		}
-
-		@Override
-		public void respondOkWithFile(File file, boolean downloadFile, int httpCacheSeconds) {
-			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
-			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
-
-			// Cache Validation
-			String ifModifiedSince = m_httpRequest.headers().get(HttpHeaderNames.IF_MODIFIED_SINCE);
-			if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
-				final Date ifModifiedSinceDate;
-				try {
-					ifModifiedSinceDate = dateFormatter.parse(ifModifiedSince);
-				} catch(ParseException ex) {
-					respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
-					return;
-				}
-
-				// Only compare up to the second because the datetime format we send to the client
-				// does not have milliseconds
-				long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
-				long fileLastModifiedSeconds = file.lastModified() / 1000;
-				if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
-					respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
-					return;
-				}
-			}
-
-			RandomAccessFile raf = null;
-			final DefaultHttpResponse response;
-			final HttpChunkedInput responseBody;
-			try {
-				raf = new RandomAccessFile(file, "r");
-				final long fileLength = raf.length();
-				response = new DefaultHttpResponse(m_httpRequestProtocolVersion, HttpResponseStatus.OK);
-				responseBody = new HttpChunkedInput(new ChunkedNioFile(raf.getChannel(), 0, fileLength, 8192));
-				final HttpHeaders headers = response.headers();
-
-				final String contentType = m_mimeTypesMap.getContentType(file);
-				headers.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
-				if (downloadFile) {
-					headers.set(HttpHeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"");
-				}
-				headers.add(HttpHeaderNames.CONTENT_LENGTH, fileLength);
-				headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
-				setCORSHeaders(headers);
-				setConnectionHeader(headers);
-
-				final Calendar time = new GregorianCalendar();
-
-				// Date header
-				addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(time.getTimeInMillis()));
-
-				// Add cache headers
-				time.add(Calendar.SECOND, httpCacheSeconds);
-				addHeader(HttpHeaderNames.EXPIRES.toString(), dateFormatter.format(time.getTimeInMillis()));
-				addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "private, max-age=" + httpCacheSeconds);
-				addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), dateFormatter.format(file.lastModified()));
-
-				if (m_responseHeaders != null) {
-					for (Map.Entry<String, String> e : m_responseHeaders.entrySet()) {
-						headers.add(e.getKey(), e.getValue());
-					}
-					m_responseHeaders = null;
-				}
-			} catch(IOException ex) {
-				LOG.error("Exception reading file {}", file.getAbsolutePath(), ex);
-				respond(INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER);
-				if (raf != null) {
-					try {
-						raf.close();
-					} catch(Exception ex2) {
-					}
-				}
+		private void clearReadTimeout() {
+			if (m_updatedReadTimeout) {
+				// already cleared it and never restored it
 				return;
 			}
-			m_msgQueue.add(response);
-			m_msgQueue.add(responseBody);
-			requestMoreWork();
+			m_updatedReadTimeout = true;
+			// Need to leave the handler in its place, so replace it with something that does nothing
+			m_channel.pipeline().replace("read-timeout", "read-timeout", new IdleStateHandler(0, 0, 0));
 		}
 
-		@Override
-		public void respondOkWithFileData(ByteBuf data, String fileName, long lastModifiedTime, boolean downloadFile, int httpCacheSeconds) {
-			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
-			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
-
-			// Cache Validation
-			String ifModifiedSince = m_httpRequest.headers().get(HttpHeaderNames.IF_MODIFIED_SINCE);
-			if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
-				final Date ifModifiedSinceDate;
-				try {
-					ifModifiedSinceDate = dateFormatter.parse(ifModifiedSince);
-				} catch(ParseException ex) {
-					respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
-					return;
-				}
-
-				// Only compare up to the second because the datetime format we send to the client
-				// does not have milliseconds
-				long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
-				long fileLastModifiedSeconds = lastModifiedTime / 1000;
-				if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
-					respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
-					return;
-				}
-			}
-
-			final DefaultHttpResponse response;
-			final HttpChunkedInput responseBody;
-			final long fileLength = data.readableBytes();
-			response = new DefaultHttpResponse(m_httpRequestProtocolVersion, HttpResponseStatus.OK);
-			responseBody = new HttpChunkedInput(new ChunkedStream(new ByteBufInputStream(data,true), 8192));
-			final HttpHeaders headers = response.headers();
-
-			final String contentType = m_mimeTypesMap.getContentType(fileName);
-			headers.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
-			if (downloadFile) {
-				headers.set(HttpHeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
-			}
-			headers.add(HttpHeaderNames.CONTENT_LENGTH, fileLength);
-			headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
-			setCORSHeaders(headers);
-			setConnectionHeader(headers);
-
-			final Calendar time = new GregorianCalendar();
-
-			// Date header
-			addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(time.getTimeInMillis()));
-
-			// Add cache headers
-			time.add(Calendar.SECOND, httpCacheSeconds);
-			addHeader(HttpHeaderNames.EXPIRES.toString(), dateFormatter.format(time.getTimeInMillis()));
-			addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "private, max-age=" + httpCacheSeconds);
-			addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), dateFormatter.format(lastModifiedTime));
-
-			if (m_responseHeaders != null) {
-				for (Map.Entry<String, String> e : m_responseHeaders.entrySet()) {
-					headers.add(e.getKey(), e.getValue());
-				}
-				m_responseHeaders = null;
-			}
-			m_msgQueue.add(response);
-			m_msgQueue.add(responseBody);
-			requestMoreWork();
-		}
-
-		@Override
-		public void respond(HttpResponseStatus httpResponseStatus, ByteBuf data) {
-			DefaultFullHttpResponse response = new DefaultFullHttpResponse(m_httpRequestProtocolVersion, httpResponseStatus, data);
-			HttpHeaders headers = response.headers();
-			headers.add(HttpHeaderNames.CONTENT_LENGTH, data.readableBytes());
-
-			setCORSHeaders(headers);
-			setConnectionHeader(headers);
-
-			if (m_responseHeaders != null) {
-				for(Map.Entry<String,String> e : m_responseHeaders.entrySet()) {
-					headers.add(e.getKey(), e.getValue());
-				}
-				m_responseHeaders = null;
-			}
-			m_msgQueue.add(response);
-			requestMoreWork();
-		}
-
-		private void setCORSHeaders(HttpHeaders headers) {
-			String secFetchMode = m_httpRequest.headers().get("sec-fetch-mode");
-			if ("cors".equals(secFetchMode)) {
-				if (ACCESS_CONTROL_ALLOW_ORIGIN != null) {
-					headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_ALLOW_ORIGIN);
-				}
-				if (ACCESS_CONTROL_ALLOW_METHODS != null) {
-					headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_METHODS);
-				}
-				if (ACCESS_CONTROL_ALLOW_HEADERS != null) {
-					headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_HEADERS);
-				}
-			}
-		}
-
-		private void setConnectionHeader(HttpHeaders headers) {
-			if (!HttpUtil.isKeepAlive(m_httpRequest)) {
-				// We're going to close the connection as soon as the response is sent,
-				// so we should also make it clear for the client.
-				headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-			} else if (m_httpRequest.protocolVersion().equals(HTTP_1_0)) {
-				headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
-			}
-		}
-
-		@Override
-		public void respondNotModified() {
-			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
-			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
-			FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
-
-			// Date header
-			addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
-
-			respond(HttpResponseStatus.OK, Unpooled.EMPTY_BUFFER);
-		}
-
-		@Override
-		public void setDynamicContentHeaders(String contentType) {
-			final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
-			dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
-
-			// Date header
-			addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
-
-			addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache, no-store, must-revalidate");
-			addHeader(HttpHeaderNames.PRAGMA.toString(), "no-cache");
-			addHeader(HttpHeaderNames.EXPIRES.toString(), "-1");
-
-			addHeader(HttpHeaderNames.CONTENT_TYPE.toString(), contentType);
-		}
-
-
-		@Override
-		public String toString() {
-			return m_connectionToString;
-		}
-
-		private void startRequest(FullHttpRequest request) {
-			m_httpRequest = request;
-			m_httpRequestProtocolVersion = m_httpRequest.protocolVersion();
-			m_httpRequestMethod = m_httpRequest.method();
-			m_requestTimer = MetricsEngine.startTimer();
-		}
-
-		private void endRequest() {
-			ReferenceCountUtil.safeRelease(m_httpRequest);
-			m_httpRequest = null;
-			if (m_requestTimer != null) {
-				m_requestTimer.close();
-				m_requestTimer = null;
-			}
-			if (m_updatedReadTimeout) {
+		private void restoreReadTimeout() {
+			if (m_updatedReadTimeout && m_channel.isOpen()) {
 				// Replace read timeout with default
 				m_updatedReadTimeout = false;
 				try {
@@ -899,6 +613,16 @@ public final class HttpServer {
 			}
 		}
 
+		@Override
+		public String remoteHostAddress() {
+			return m_connectionToString;
+		}
+
+		@Override
+		public String toString() {
+			return m_connectionToString;
+		}
+
 		private void clearConnection() {
 			m_channel = null;
 			m_context = null;
@@ -906,9 +630,6 @@ public final class HttpServer {
 
 		@Override
 		protected void _doWork() {
-			if (m_flushing) {
-				return;
-			}
 			while (true) {
 				Object msg = m_msgQueue.poll();
 				if (msg == null) {
@@ -933,118 +654,44 @@ public final class HttpServer {
 					m_context = (ChannelHandlerContext) msg;
 
 				} else if (msg instanceof FullHttpRequest) {
-					startRequest((FullHttpRequest)msg);
-
-					if (!m_httpRequest.decoderResult().isSuccess()) {
-						respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
-						endRequest();
+					if (m_currentRequest != null) {
+						// Previous request never finished
+						m_currentRequest.endRequest();
+					}
+					m_currentRequest = new UserRequestState((FullHttpRequest)msg);
+					if (!((FullHttpRequest)msg).decoderResult().isSuccess()) {
+						m_currentRequest.respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
 
 					} else {
 						clearReadTimeout();
 						// The user may hold onto the objects passed in and choose to reply later.  If the user DOES NOT
 						// call one of the respond() methods in IHttpResponse we will leak the request
 						try {
-							m_requestHandler.onRequest(this, this);
+							m_requestHandler.onRequest(m_currentRequest, m_currentRequest);
 						} catch (Throwable t) {
 							LOG.warn("Uncaught exception from " + m_requestHandler.getClass().getName(), t);
 						}
 					}
 
-				} else if (msg instanceof DefaultFullHttpResponse) {
-					DefaultFullHttpResponse response = (DefaultFullHttpResponse) msg;
+				} else if (msg instanceof UserRequestState) {
 					if (m_context == null) {
 						// The client disconnected, simply throw away the response
-						response.release();
 						m_earlyDisconnects.increment();
-						endRequest();
+						((UserRequestState)msg).endRequest();
+
+					} else if (m_currentRequest != msg) {
+						// Responded request isn't the current
+						((UserRequestState)msg).endRequest();
 
 					} else {
-						if (LOG.isDebugEnabled()) {
-							LOG.debug("[{}] writeAndFlush({})", m_connectionToString, response.status().code());
+						// Remove current request, it isn't current anymore
+						m_currentRequest = null;
+						if (((UserRequestState) msg).m_httpFullResponse != null) {
+							writeFullResponse((UserRequestState) msg);
+						} else {
+							writeHeaderAndBody((UserRequestState) msg);
 						}
-						// Since this happens only once in a Connection and connections are created PER request,
-						// its ok to use the lambda here since it would be a wash to create a class to wrap it
-						final MetricsEngine.IMetricTimer requestTimer = m_requestTimer;
-						m_requestTimer = null;
-
-						final boolean shuttingDown = (m_stopDonePromise != null);
-						// If we are shutting down, need to make sure we close the connection (after this request is sent)
-						if (shuttingDown) {
-							response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-						}
-						ChannelFuture  flushFuture = m_context.writeAndFlush(response);
-						m_flushing = true;
-						flushFuture.addListener((f) -> {
-							if (requestTimer == null) {
-								m_flushing = false;
-								return;
-							}
-							try {
-								if (f.isSuccess()) {
-									m_requestRate.record(requestTimer);
-								}
-								requestTimer.close();
-								// We are not going to trust the client to close the connection, so we will after we flush
-								if (shuttingDown) {
-									m_context.close();
-								}
-								endRequest();
-							} finally {
-								m_flushing = false;
-								requestMoreWork();
-							}
-						});
-					}
-
-				} else if (msg instanceof DefaultHttpResponse) {
-					DefaultHttpResponse response = (DefaultHttpResponse) msg;
-					if (m_context != null) {
-						if (LOG.isDebugEnabled()) {
-							LOG.debug("[{}] write({})", m_connectionToString, response.status().code());
-						}
-						final boolean shuttingDown = (m_stopDonePromise != null);
-						// If we are shutting down, need to make sure we close the connection (after this request is sent)
-						if (shuttingDown) {
-							response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-						}
-						m_context.write(response);
-					}
-
-				} else if (msg instanceof HttpChunkedInput) {
-					HttpChunkedInput response = (HttpChunkedInput) msg;
-					if (m_context == null) {
-						// The client disconnected, simply throw away the response
-						try {
-							response.close();
-						} catch(Exception ex) {
-						}
-						m_earlyDisconnects.increment();
-						endRequest();
-
-					} else {
-						if (LOG.isDebugEnabled()) {
-							LOG.debug("[{}] writeAndFlush(<chunked data>)", m_connectionToString);
-						}
-						// Since this happens only once in a Connection and connections are created PER request,
-						// its ok to use the lambda here since it would be a wash to create a class to wrap it
-						final MetricsEngine.IMetricTimer requestTimer = m_requestTimer;
-						m_requestTimer = null;
-
-						m_context.writeAndFlush(response).addListener((f) -> {
-							if (requestTimer != null) {
-								if (f.isSuccess()) {
-									m_requestRate.record(requestTimer);
-								}
-								requestTimer.close();
-							}
-
-							// We are not going to trust the client to close the connection, so we will after we flush
-							final boolean shuttingDown = (m_stopDonePromise != null);
-							if (shuttingDown) {
-								m_context.close();
-							}
-							endRequest();
-						});
+						restoreReadTimeout();
 					}
 
 				} else if (msg instanceof Throwable) {
@@ -1055,9 +702,397 @@ public final class HttpServer {
 					} catch (Throwable t) {
 						LOG.warn("Uncaught exception from " + m_failureHandler.getClass().getName(), t);
 					}
-					endRequest();
-
+					if (m_context != null) {
+						m_context.close();
+					}
+					clearConnection();
 				}
+			}
+		}
+
+		public void writeFullResponse(UserRequestState state) {
+			if (LOG.isDebugEnabled()) {
+				LOG.debug("[{}] writeAndFlush({})", m_connectionToString, state.m_httpFullResponse.status().code());
+			}
+			// Since this happens only once in a Connection and connections are created PER request,
+			// its ok to use the lambda here since it would be a wash to create a class to wrap it
+			final MetricsEngine.IMetricTimer requestTimer = state.m_requestTimer;
+			state.m_requestTimer = null;
+
+			final boolean shuttingDown = (m_stopDonePromise != null);
+			// If we are shutting down, need to make sure we close the connection (after this request is sent)
+			if (shuttingDown) {
+				state.m_httpFullResponse.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+			}
+			try {
+				m_context.writeAndFlush(state.m_httpFullResponse).addListener((f) -> {
+					if (requestTimer != null) {
+						if (f.isSuccess()) {
+							m_requestRate.record(requestTimer);
+						}
+						requestTimer.close();
+					}
+					// We are not going to trust the client to close the connection, so we will after we flush
+					if (shuttingDown) {
+						m_context.close();
+					}
+				});
+			} catch(Exception ex) {
+				LOG.error("[{}] Exception writing response", m_connectionToString, ex);
+			}
+			state.m_httpFullResponse = null;
+		}
+
+		public void writeHeaderAndBody(UserRequestState state) {
+			if (LOG.isDebugEnabled()) {
+				LOG.debug("[{}] writeAndFlush(<chunked data>)", m_connectionToString);
+			}
+			// Since this happens only once in a Connection and connections are created PER request,
+			// its ok to use the lambda here since it would be a wash to create a class to wrap it
+			final MetricsEngine.IMetricTimer requestTimer = state.m_requestTimer;
+			state.m_requestTimer = null;
+
+			if (LOG.isDebugEnabled()) {
+				LOG.debug("[{}] write({})", m_connectionToString, state.m_httpResponseHeader.status().code());
+			}
+			final boolean shuttingDown = (m_stopDonePromise != null);
+			// If we are shutting down, need to make sure we close the connection (after this request is sent)
+			if (shuttingDown) {
+				state.m_httpResponseHeader.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+			}
+
+			try {
+				m_context.write(state.m_httpResponseHeader);
+				m_context.writeAndFlush(state.m_httpResponseBody).addListener((f) -> {
+					if (requestTimer != null) {
+						if (f.isSuccess()) {
+							m_requestRate.record(requestTimer);
+						}
+						requestTimer.close();
+					}
+
+					// We are not going to trust the client to close the connection, so we will after we flush
+					if (shuttingDown) {
+						m_context.close();
+					}
+				});
+			} catch(Exception ex) {
+				LOG.error("[{}] Exception writing response", m_connectionToString, ex);
+			}
+			state.m_httpResponseHeader = null;
+			state.m_httpResponseBody = null;
+		}
+
+		private class UserRequestState implements IHttpRequest, IHttpResponse {
+			private final HttpVersion m_httpRequestProtocolVersion;
+			private final HttpMethod m_httpRequestMethod;
+			private FullHttpRequest m_httpRequest;
+			private MetricsEngine.IMetricTimer m_requestTimer;
+			private Map<String,String> m_responseHeaders;
+			private DefaultFullHttpResponse m_httpFullResponse;
+			private DefaultHttpResponse m_httpResponseHeader;
+			private HttpChunkedInput m_httpResponseBody;
+
+			private UserRequestState(FullHttpRequest request) {
+				m_httpRequest = request;
+				m_httpRequestProtocolVersion = m_httpRequest.protocolVersion();
+				m_httpRequestMethod = m_httpRequest.method();
+				m_requestTimer = MetricsEngine.startTimer();
+			}
+
+			public synchronized void endRequest() {
+				ReferenceCountUtil.safeRelease(m_httpFullResponse);
+				m_httpFullResponse = null;
+				ReferenceCountUtil.safeRelease(m_httpResponseHeader);
+				m_httpResponseHeader = null;
+				if (m_httpResponseBody != null) {
+					try {
+						m_httpResponseBody.close();
+					} catch (Exception ex) {
+					}
+					m_httpResponseBody = null;
+				}
+				if (m_requestTimer != null) {
+					m_requestTimer.close();
+					m_requestTimer = null;
+				}
+			}
+
+			@Override
+			public String remoteHostAddress() {
+				return m_connectionToString;
+			}
+
+			@Override
+			public String requestMethod() {
+				return m_httpRequestMethod.name();
+			}
+
+			@Override
+			public String requestURI() {
+				return m_httpRequest.uri();
+			}
+
+			@Override
+			public String headerValue(String name) {
+				return m_httpRequest.headers().get(name);
+			}
+
+			@Override
+			public ByteBuf data() {
+				return m_httpRequest.content();
+			}
+
+			@Override
+			public void addHeader(String key, String value) {
+				if (m_responseHeaders == null) {
+					m_responseHeaders = new HashMap<>();
+				}
+				m_responseHeaders.put(key, value);
+			}
+
+			@Override
+			public void respondOk(ByteBuf data) {
+				respond(HttpResponseStatus.OK, data);
+			}
+
+			@Override
+			public void respondOkWithFile(File file, boolean downloadFile, int httpCacheSeconds) {
+				if (m_httpRequest == null) {
+					throw new IllegalStateException("Already responded");
+				}
+				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+				dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+				// Cache Validation
+				String ifModifiedSince = m_httpRequest.headers().get(HttpHeaderNames.IF_MODIFIED_SINCE);
+				if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
+					final Date ifModifiedSinceDate;
+					try {
+						ifModifiedSinceDate = dateFormatter.parse(ifModifiedSince);
+					} catch(ParseException ex) {
+						respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
+						return;
+					}
+
+					// Only compare up to the second because the datetime format we send to the client
+					// does not have milliseconds
+					long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
+					long fileLastModifiedSeconds = file.lastModified() / 1000;
+					if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
+						respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
+						return;
+					}
+				}
+
+				RandomAccessFile raf = null;
+				final DefaultHttpResponse response;
+				final HttpChunkedInput responseBody;
+				try {
+					raf = new RandomAccessFile(file, "r");
+					final long fileLength = raf.length();
+					response = new DefaultHttpResponse(m_httpRequestProtocolVersion, HttpResponseStatus.OK);
+					responseBody = new HttpChunkedInput(new ChunkedNioFile(raf.getChannel(), 0, fileLength, 8192));
+					final HttpHeaders headers = response.headers();
+
+					final String contentType = m_mimeTypesMap.getContentType(file);
+					headers.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
+					if (downloadFile) {
+						headers.set(HttpHeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"");
+					}
+					headers.add(HttpHeaderNames.CONTENT_LENGTH, fileLength);
+					headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
+					setCORSHeaders(headers);
+					setConnectionHeader(headers);
+
+					final Calendar time = new GregorianCalendar();
+
+					// Date header
+					addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(time.getTimeInMillis()));
+
+					// Add cache headers
+					time.add(Calendar.SECOND, httpCacheSeconds);
+					addHeader(HttpHeaderNames.EXPIRES.toString(), dateFormatter.format(time.getTimeInMillis()));
+					addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "private, max-age=" + httpCacheSeconds);
+					addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), dateFormatter.format(file.lastModified()));
+
+					if (m_responseHeaders != null) {
+						for (Map.Entry<String, String> e : m_responseHeaders.entrySet()) {
+							headers.add(e.getKey(), e.getValue());
+						}
+						m_responseHeaders = null;
+					}
+				} catch(IOException ex) {
+					LOG.error("Exception reading file {}", file.getAbsolutePath(), ex);
+					respond(INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER);
+					if (raf != null) {
+						try {
+							raf.close();
+						} catch(Exception ex2) {
+						}
+					}
+					return;
+				}
+				m_httpResponseHeader = response;
+				m_httpResponseBody = responseBody;
+				m_msgQueue.add(this);
+				requestMoreWork();
+				if (m_httpRequest != null) {
+					ReferenceCountUtil.safeRelease(m_httpRequest);
+					m_httpRequest = null;
+				}
+			}
+
+			@Override
+			public void respondOkWithFileData(ByteBuf data, String fileName, long lastModifiedTime, boolean downloadFile, int httpCacheSeconds) {
+				if (m_httpRequest == null) {
+					throw new IllegalStateException("Already responded");
+				}
+				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+				dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+				// Cache Validation
+				String ifModifiedSince = m_httpRequest.headers().get(HttpHeaderNames.IF_MODIFIED_SINCE);
+				if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
+					final Date ifModifiedSinceDate;
+					try {
+						ifModifiedSinceDate = dateFormatter.parse(ifModifiedSince);
+					} catch(ParseException ex) {
+						respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
+						return;
+					}
+
+					// Only compare up to the second because the datetime format we send to the client
+					// does not have milliseconds
+					long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
+					long fileLastModifiedSeconds = lastModifiedTime / 1000;
+					if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
+						respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
+						return;
+					}
+				}
+
+				final DefaultHttpResponse response;
+				final HttpChunkedInput responseBody;
+				final long fileLength = data.readableBytes();
+				response = new DefaultHttpResponse(m_httpRequestProtocolVersion, HttpResponseStatus.OK);
+				responseBody = new HttpChunkedInput(new ChunkedStream(new ByteBufInputStream(data,true), 8192));
+				final HttpHeaders headers = response.headers();
+
+				final String contentType = m_mimeTypesMap.getContentType(fileName);
+				headers.set(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
+				if (downloadFile) {
+					headers.set(HttpHeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+				}
+				headers.add(HttpHeaderNames.CONTENT_LENGTH, fileLength);
+				headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
+				setCORSHeaders(headers);
+				setConnectionHeader(headers);
+
+				final Calendar time = new GregorianCalendar();
+
+				// Date header
+				addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(time.getTimeInMillis()));
+
+				// Add cache headers
+				time.add(Calendar.SECOND, httpCacheSeconds);
+				addHeader(HttpHeaderNames.EXPIRES.toString(), dateFormatter.format(time.getTimeInMillis()));
+				addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "private, max-age=" + httpCacheSeconds);
+				addHeader(HttpHeaderNames.LAST_MODIFIED.toString(), dateFormatter.format(lastModifiedTime));
+
+				if (m_responseHeaders != null) {
+					for (Map.Entry<String, String> e : m_responseHeaders.entrySet()) {
+						headers.add(e.getKey(), e.getValue());
+					}
+					m_responseHeaders = null;
+				}
+				m_httpResponseHeader = response;
+				m_httpResponseBody = responseBody;
+				m_msgQueue.add(this);
+				requestMoreWork();
+				if (m_httpRequest != null) {
+					ReferenceCountUtil.safeRelease(m_httpRequest);
+					m_httpRequest = null;
+				}
+			}
+
+			@Override
+			public void respond(HttpResponseStatus httpResponseStatus, ByteBuf data) {
+				if (m_httpRequest == null) {
+					throw new IllegalStateException("Already responded");
+				}
+				DefaultFullHttpResponse response = new DefaultFullHttpResponse(m_httpRequestProtocolVersion, httpResponseStatus, data);
+				HttpHeaders headers = response.headers();
+				headers.add(HttpHeaderNames.CONTENT_LENGTH, data.readableBytes());
+
+				setCORSHeaders(headers);
+				setConnectionHeader(headers);
+
+				if (m_responseHeaders != null) {
+					for(Map.Entry<String,String> e : m_responseHeaders.entrySet()) {
+						headers.add(e.getKey(), e.getValue());
+					}
+					m_responseHeaders = null;
+				}
+				m_httpFullResponse = response;
+				m_msgQueue.add(this);
+				requestMoreWork();
+				if (m_httpRequest != null) {
+					ReferenceCountUtil.safeRelease(m_httpRequest);
+					m_httpRequest = null;
+				}
+			}
+
+			private void setCORSHeaders(HttpHeaders headers) {
+				String secFetchMode = m_httpRequest.headers().get("sec-fetch-mode");
+				if ("cors".equals(secFetchMode)) {
+					if (ACCESS_CONTROL_ALLOW_ORIGIN != null) {
+						headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_ALLOW_ORIGIN);
+					}
+					if (ACCESS_CONTROL_ALLOW_METHODS != null) {
+						headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_METHODS);
+					}
+					if (ACCESS_CONTROL_ALLOW_HEADERS != null) {
+						headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_HEADERS);
+					}
+				}
+			}
+
+			private void setConnectionHeader(HttpHeaders headers) {
+				if (!HttpUtil.isKeepAlive(m_httpRequest)) {
+					// We're going to close the connection as soon as the response is sent,
+					// so we should also make it clear for the client.
+					headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+				} else if (m_httpRequest.protocolVersion().equals(HTTP_1_0)) {
+					headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+				}
+			}
+
+			@Override
+			public void respondNotModified() {
+				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+				dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+				FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
+
+				// Date header
+				addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
+
+				respond(HttpResponseStatus.OK, Unpooled.EMPTY_BUFFER);
+			}
+
+			@Override
+			public void setDynamicContentHeaders(String contentType) {
+				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+				dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+				// Date header
+				addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
+
+				addHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache, no-store, must-revalidate");
+				addHeader(HttpHeaderNames.PRAGMA.toString(), "no-cache");
+				addHeader(HttpHeaderNames.EXPIRES.toString(), "-1");
+
+				addHeader(HttpHeaderNames.CONTENT_TYPE.toString(), contentType);
 			}
 		}
 	}
@@ -1136,6 +1171,7 @@ public final class HttpServer {
 			}
 			return new HttpServer(this);
 		}
+
 	}
 
 	public interface IHttpHeader {
