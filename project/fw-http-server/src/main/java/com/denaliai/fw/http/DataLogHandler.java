@@ -14,9 +14,29 @@ class DataLogHandler extends ChannelDuplexHandler {
 	}
 
 	@Override
+	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+		LOG.trace("[{}] DataLogHandler.channelReadComplete()", ctx.channel().remoteAddress().toString());
+		super.channelReadComplete(ctx);
+	}
+
+	@Override
+	public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+		LOG.trace("[{}] DataLogHandler.close()", ctx.channel().remoteAddress().toString());
+		super.close(ctx, promise);
+	}
+
+	@Override
+	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+		LOG.trace("[{}] DataLogHandler.exceptionCaught()", ctx.channel().remoteAddress().toString());
+		super.exceptionCaught(ctx, cause);
+	}
+
+	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		if (msg instanceof ByteBuf) {
-			LOG.trace("HTTP inbound data buffer\n{}", printBuffer((ByteBuf)msg));
+			LOG.trace("[{}] HTTP inbound data buffer\n{}", ctx.channel().remoteAddress().toString(), printBuffer((ByteBuf) msg));
+		} else {
+			LOG.trace("[{}] HTTP inbound message: {}", ctx.channel().remoteAddress().toString(), msg.getClass().getCanonicalName());
 		}
 		super.channelRead(ctx, msg);
 	}
@@ -24,7 +44,9 @@ class DataLogHandler extends ChannelDuplexHandler {
 	@Override
 	public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
 		if (msg instanceof ByteBuf) {
-			LOG.trace("HTTP outbound data buffer\n{}", printBuffer((ByteBuf)msg));
+			LOG.trace("[{}] HTTP outbound data buffer\n{}", ctx.channel().remoteAddress().toString(), printBuffer((ByteBuf) msg));
+		} else {
+			LOG.trace("[{}] HTTP outbound message: {}", ctx.channel().remoteAddress().toString(), msg.getClass().getCanonicalName());
 		}
 		super.write(ctx, msg, promise);
 	}

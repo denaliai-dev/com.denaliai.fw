@@ -18,6 +18,7 @@ import io.netty.handler.stream.ChunkedNioFile;
 import io.netty.handler.stream.ChunkedStream;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
@@ -51,6 +52,7 @@ public final class HttpServer {
 	private static final String ACCESS_CONTROL_ALLOW_ORIGIN = Config.getFWString("http.HttpServer.accessControlAllowOrigin", null);
 	private static final String ACCESS_CONTROL_ALLOW_METHODS = Config.getFWString("http.HttpServer.accessControlAllowMethods", null);
 	private static final String ACCESS_CONTROL_ALLOW_HEADERS = Config.getFWString("http.HttpServer.accessControlAllowHeaders", null);
+	private static final boolean LOG_DECODER_FAILURES = Config.getFWBoolean("http.HttpServer.log-decoder-failures", Boolean.FALSE);
 	private static final AttributeKey<Connection> CONNECTION = AttributeKey.newInstance("ConnectionClass");
 	private static final MimetypesFileTypeMap m_mimeTypesMap = new MimetypesFileTypeMap();
 
@@ -58,6 +60,8 @@ public final class HttpServer {
 	private final CounterAndRateMetric m_disconnections;
 	private final CounterAndRateMetric m_newRequests;
 	private final CounterMetric m_numExceptions;
+	private final CounterMetric m_numReadTimeouts;
+	private final CounterMetric m_numDecoderFailures;
 	private final CounterMetric m_earlyDisconnects;
 	private final TotalCounterMetric m_listenerActive;
 	private final TotalCounterMetric m_activeConnections;
@@ -107,6 +111,8 @@ public final class HttpServer {
 		m_disconnections = MetricsEngine.newCounterAndRateMetric(builder.m_loggerNameSuffix + ".disconnections");
 		m_newRequests = MetricsEngine.newCounterAndRateMetric(builder.m_loggerNameSuffix + ".new-requests");
 		m_numExceptions = MetricsEngine.newCounterMetric(builder.m_loggerNameSuffix + ".exception-count");
+		m_numReadTimeouts = MetricsEngine.newCounterMetric(builder.m_loggerNameSuffix + ".read-timeout-count");
+		m_numDecoderFailures = MetricsEngine.newCounterMetric(builder.m_loggerNameSuffix + ".decoder-failure-count");
 		m_activeConnections = MetricsEngine.newTotalCounterMetric(builder.m_loggerNameSuffix + ".active-connections");
 		m_requestRate = MetricsEngine.newRateMetric(builder.m_loggerNameSuffix + ".success-request-rate");
 		m_requestDataSize = MetricsEngine.newValueMetric(builder.m_loggerNameSuffix + ".request-bytes");
@@ -375,13 +381,13 @@ public final class HttpServer {
 				m_newRequests.increment();
 
 				if (!req.decoderResult().isSuccess()) {
-					if (LOG.isDebugEnabled()) {
+					m_numDecoderFailures.increment();
+					if (LOG.isDebugEnabled() || LOG_DECODER_FAILURES) {
 						LOG.error("[{}] HTTP decoder failed", ctx.channel().remoteAddress().toString(), req.decoderResult().cause());
-						conn.callOnFailure(req.decoderResult().cause());
-						req.release();
-						ctx.close();
-						return;
 					}
+					req.release();
+					ctx.close();
+					return;
 				}
 
 				// TODO THIS IS NEEDED FOR SENDING MULTIPLE REQUESTS ON THE SAME CONNECTION <---------------------------------------------------------------------------------------------------------------------
@@ -420,21 +426,37 @@ public final class HttpServer {
 
 		@Override
 		public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-			m_numExceptions.increment();
-
-			final Connection conn = ctx.channel().attr(CONNECTION).get();
-			if (conn == null) {
-				if (LOG.isDebugEnabled()) {
-					LOG.error("[{}] ConnectionInboundMsgHandler.exceptionCaught() - CONNECTION attribute was missing", ctx.channel().remoteAddress().toString(), cause);
+			if (cause instanceof ReadTimeoutException) {
+				m_numReadTimeouts.increment();
+				final Connection conn = ctx.channel().attr(CONNECTION).get();
+				if (conn == null) {
+					if (LOG.isDebugEnabled()) {
+						LOG.error("[{}] Read timeout exception, closing connection", ctx.channel().remoteAddress().toString(), cause);
+					}
+					ctx.close();
+					return;
 				}
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("[{}] Read timeout exception, closing connection", conn.remoteHostAddress(), cause);
+				}
+				conn.callOnFailure(cause);
 				ctx.close();
-				return;
+			} else {
+				m_numExceptions.increment();
+				final Connection conn = ctx.channel().attr(CONNECTION).get();
+				if (conn == null) {
+					if (LOG.isDebugEnabled()) {
+						LOG.error("[{}] ConnectionInboundMsgHandler.exceptionCaught() - CONNECTION attribute was missing, closing connection", ctx.channel().remoteAddress().toString(), cause);
+					}
+					ctx.close();
+					return;
+				}
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("[{}] ConnectionInboundMsgHandler.exceptionCaught(), closing connection", conn.remoteHostAddress(), cause);
+				}
+				conn.callOnFailure(cause);
+				ctx.close();
 			}
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("[{}] ConnectionInboundMsgHandler.exceptionCaught()", conn.remoteHostAddress(), cause);
-			}
-			conn.callOnFailure(cause);
-			ctx.close();
 		}
 
 		@Override
@@ -515,7 +537,8 @@ public final class HttpServer {
 			m_serverState = ServerState.BoundListening;
 			m_serverConnection = ctx.channel();
 
-			LOG.info("Listening for HTTP requests on port {}", m_httpPort);
+			LOG.info("Listening for HTTP requests on port {} with a read timeout of {}ms", m_httpPort, m_readTimeoutInMS);
+
 			m_startDonePromise.setSuccess(null);
 
 			super.channelActive(ctx);
@@ -592,13 +615,17 @@ public final class HttpServer {
 		}
 
 		private void clearReadTimeout() {
-			if (m_updatedReadTimeout) {
-				// already cleared it and never restored it
+			if (m_updatedReadTimeout || !m_channel.isOpen()) {
+				// already cleared it and never restored it or connection is closed
 				return;
 			}
-			m_updatedReadTimeout = true;
-			// Need to leave the handler in its place, so replace it with something that does nothing
-			m_channel.pipeline().replace("read-timeout", "read-timeout", new IdleStateHandler(0, 0, 0));
+			try {
+				// Need to leave the handler in its place, so replace it with something that does nothing
+				m_channel.pipeline().replace("read-timeout", "read-timeout", new IdleStateHandler(0, 0, 0));
+				m_updatedReadTimeout = true;
+			} catch(NoSuchElementException ex) {
+				// This is fine, it is an edge failure case when the connection is closed by the time we get here
+			}
 		}
 
 		private void restoreReadTimeout() {
@@ -630,6 +657,18 @@ public final class HttpServer {
 
 		@Override
 		protected void _doWork() {
+			try {
+				_doWork0();
+			} catch(Throwable t) {
+				LOG.error("", t);
+				if (m_context != null) {
+					m_context.close();
+				}
+				clearConnection();
+			}
+		}
+
+		private void _doWork0() {
 			while (true) {
 				Object msg = m_msgQueue.poll();
 				if (msg == null) {
