@@ -405,7 +405,7 @@ public final class HttpServer {
 							sb.append('\t').append(key).append(" = ").append(value).append("\r\n");
 						}
 					}
-					LOG.info("{} {} {}{}", req.method(), req.protocolVersion(), req.uri(), sb);
+					LOG.info("[{}] {} {} {}{}", ctx.channel().remoteAddress().toString(), req.method(), req.protocolVersion(), req.uri(), sb);
 				}
 				conn.callOnRequest(req);
 			} else {
