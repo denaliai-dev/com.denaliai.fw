@@ -213,6 +213,20 @@ public abstract class JSONSerializer {
 			return (BooleanNode) this;
 		}
 
+		public long toLongValue() throws JsonUseException {
+			if (this instanceof NumericNode) {
+				return ((NumericNode)this).toLong();
+			}
+			if (!(this instanceof StringNode)) {
+				throw new JsonUseException("Node of type " + getClass().getSimpleName() + " cannot be converted to a long");
+			}
+			try {
+				return Long.parseLong(((StringNode)this).m_value);
+			} catch(Exception ex) {
+				throw new JsonUseException("StringNode value cannot be converted to a long");
+			}
+		}
+
 		public abstract void writeJson(ByteBuf dest);
 	}
 
