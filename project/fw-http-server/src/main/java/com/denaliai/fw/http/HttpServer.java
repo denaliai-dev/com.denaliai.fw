@@ -1083,8 +1083,9 @@ public final class HttpServer {
 			}
 
 			private void setCORSHeaders(HttpHeaders headers) {
-				String secFetchMode = m_httpRequest.headers().get("sec-fetch-mode");
-				if ("cors".equals(secFetchMode)) {
+				final String secFetchMode = m_httpRequest.headers().get("sec-fetch-mode");
+				final String origin = m_httpRequest.headers().get("origin");
+				if ("cors".equals(secFetchMode) || origin != null) {
 					if (ACCESS_CONTROL_ALLOW_ORIGIN != null) {
 						headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_ALLOW_ORIGIN);
 					}
