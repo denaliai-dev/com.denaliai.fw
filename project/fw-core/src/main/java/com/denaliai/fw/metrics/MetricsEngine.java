@@ -31,6 +31,7 @@ public final class MetricsEngine {
 	private static final FastThreadLocal<MetricDataInstance> m_currentMetricData = new FastThreadLocal<>();
 	private static final SnapshotWorker m_worker = new SnapshotWorker();
 	private static final Queue<Object> m_msgQueue = PlatformDependent.newMpscQueue();
+	private static final Map<String, MetricBase> m_metricsMap = new HashMap<>();
 	private static final List<MetricBase> m_metrics = new LinkedList<>();
 	private static final AtomicInteger m_snapshotNumber = new AtomicInteger(1);
 	private static int m_dataIndex = 0;
@@ -39,44 +40,65 @@ public final class MetricsEngine {
 	private static final CounterMetric m_numNumSnapshotRetry = newCounterMetric("snapshot-retries");
 
 	public synchronized static CounterMetric newCounterMetric(String name) {
-		CounterMetric m = new CounterMetric(name, m_dataIndex++);
-		m_metrics.add(m);
+		CounterMetric m = (CounterMetric)m_metricsMap.get(name);
+		if (m == null) {
+			m_metrics.add(m = new CounterMetric(name, m_dataIndex++));
+			m_metricsMap.put(name, m);
+		}
 		return m;
 	}
 
 	public synchronized static ValueMetric newValueMetric(String name) {
-		ValueMetric m = new ValueMetric(name, m_dataIndex++);
-		m_metrics.add(m);
+		ValueMetric m = (ValueMetric)m_metricsMap.get(name);
+		if (m == null) {
+			m_metrics.add(m = new ValueMetric(name, m_dataIndex++));
+			m_metricsMap.put(name, m);
+		}
 		return m;
 	}
 
 	public synchronized static CounterAndRateMetric newCounterAndRateMetric(String name) {
-		CounterAndRateMetric m = new CounterAndRateMetric(name, m_dataIndex++);
-		m_metrics.add(m);
+		CounterAndRateMetric m = (CounterAndRateMetric)m_metricsMap.get(name);
+		if (m == null) {
+			m_metrics.add(m = new CounterAndRateMetric(name, m_dataIndex++));
+			m_metricsMap.put(name, m);
+		}
 		return m;
 	}
 
 	public synchronized static TotalCounterMetric newTotalCounterMetric(String name) {
-		TotalCounterMetric m = new TotalCounterMetric(name, m_dataIndex++);
-		m_metrics.add(m);
+		TotalCounterMetric m = (TotalCounterMetric)m_metricsMap.get(name);
+		if (m == null) {
+			m_metrics.add(m = new TotalCounterMetric(name, m_dataIndex++));
+			m_metricsMap.put(name, m);
+		}
 		return m;
 	}
 
 	public synchronized static DurationRateMetric newRateMetric(String name) {
-		DurationRateMetric m = new DurationRateMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++);
-		m_metrics.add(m);
+		DurationRateMetric m = (DurationRateMetric)m_metricsMap.get(name);
+		if (m == null) {
+			m_metrics.add(m = new DurationRateMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++));
+			m_metricsMap.put(name, m);
+		}
 		return m;
 	}
 
 	public synchronized static MinMaxAvgValueMetric newMinMaxAvgValueMetric(String name) {
-		MinMaxAvgValueMetric m = new MinMaxAvgValueMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++);
-		m_metrics.add(m);
+		MinMaxAvgValueMetric m = (MinMaxAvgValueMetric)m_metricsMap.get(name);
+		if (m == null) {
+			m_metrics.add(m = new MinMaxAvgValueMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++, m_dataIndex++));
+			m_metricsMap.put(name, m);
+		}
 		return m;
 	}
 
 	public synchronized static MinMaxValueMetric newMinMaxValueMetric(String name) {
-		MinMaxValueMetric m = new MinMaxValueMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++);
-		m_metrics.add(m);
+		MinMaxValueMetric m = (MinMaxValueMetric)m_metricsMap.get(name);
+		if (m == null) {
+			m_metrics.add(m = new MinMaxValueMetric(name, m_dataIndex++, m_dataIndex++, m_dataIndex++));
+			m_metricsMap.put(name, m);
+		}
 		return m;
 	}
 
