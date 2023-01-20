@@ -20,8 +20,11 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 public class Application {
-	private static final long SHUTDOWN_QUIET_PERIOD = Config.getFWInt("core.NeuronApplication.shutdownQuietPeriod", 0);
-	private static final long SHUTDOWN_MAX_WAIT = Config.getFWInt("core.NeuronApplication.shutdownMaxWait", 15000);
+	private static final boolean HALT_ON_SHUTDOWN = Config.getFWBoolean("Application.haltOnShutdown", Boolean.FALSE);
+	private static final int HALT_ON_SHUTDOWN_EXIT_CODE = Config.getFWInt("Application.haltOnShutdown", 0);
+	private static final long SHUTDOWN_QUIET_PERIOD = Config.getFWInt("Application.shutdownQuietPeriod", 0);
+	private static final long SHUTDOWN_MAX_WAIT = Config.getFWInt("Application.shutdownMaxWait", 15000);
+
 	private static final CounterMetric m_applicationStart = MetricsEngine.newCounterMetric("application-start");
 	private static final CounterMetric m_applicationStop = MetricsEngine.newCounterMetric("application-stop");
 
@@ -210,6 +213,9 @@ public class Application {
 		LOG.info("End of shutdown hook");
 		if (LoggingImplRegistration.registeredLoggingImpl() != null) {
 			LoggingImplRegistration.registeredLoggingImpl().shutdown();
+		}
+		if (HALT_ON_SHUTDOWN) {
+			Runtime.getRuntime().halt(HALT_ON_SHUTDOWN_EXIT_CODE);
 		}
 	}
 

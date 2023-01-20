@@ -629,13 +629,14 @@ public final class HttpServer {
 		}
 
 		private void restoreReadTimeout() {
-			if (m_updatedReadTimeout && m_channel.isOpen()) {
+			if (m_updatedReadTimeout && m_channel != null && m_channel.isOpen() && m_context != null) {
 				// Replace read timeout with default
 				m_updatedReadTimeout = false;
 				try {
 					m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(m_readTimeoutInMS, TimeUnit.MILLISECONDS));
-				} catch(Exception ex) {
-					LOG.error("Missing read-timeout handler, perhaps the channel is closed? Active={} Open={}", m_channel.isActive(), m_channel.isOpen(), ex);
+				} catch(NoSuchElementException ex) {
+					// This is fine, it is an edge failure case most likely due to a closing channel/connection
+					m_context.close(); // Let's just make sure we are closing
 				}
 			}
 		}
