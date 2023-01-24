@@ -16,12 +16,11 @@ import io.netty.util.concurrent.Promise;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 public class Application {
 	private static final boolean HALT_ON_SHUTDOWN = Config.getFWBoolean("Application.haltOnShutdown", Boolean.FALSE);
-	private static final int HALT_ON_SHUTDOWN_EXIT_CODE = Config.getFWInt("Application.haltOnShutdown", 0);
+	private static final int HALT_ON_SHUTDOWN_EXIT_CODE = Config.getFWInt("Application.haltOnShutdownExitCode", 0);
 	private static final long SHUTDOWN_QUIET_PERIOD = Config.getFWInt("Application.shutdownQuietPeriod", 0);
 	private static final long SHUTDOWN_MAX_WAIT = Config.getFWInt("Application.shutdownMaxWait", 15000);
 
