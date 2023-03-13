@@ -8,16 +8,16 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.netty.util.internal.PlatformDependent;
 import org.asynchttpclient.*;
 import org.asynchttpclient.netty.LazyResponseBodyPart;
-import org.asynchttpclient.netty.ssl.JsseSslEngineFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.SSLContext;
+import java.io.File;
 import java.security.NoSuchAlgorithmException;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,6 +48,7 @@ public class HttpClient {
 	private Integer m_maxConnectionsPerHost = Config_MaxConnectionsPerHost;
 	private Boolean m_keepAlive = Config_KeepAlive;
 	private Boolean m_useInsecureTrustManager;
+	private String m_caCertPath;
 
 	public HttpClient() {
 	}
@@ -67,6 +68,10 @@ public class HttpClient {
 
 	public void setKeepAlive(boolean value) {
 		m_keepAlive = value;
+	}
+
+	public void enableSSL(String caCertPath) {
+		m_caCertPath = caCertPath;
 	}
 
 	public Future<Void> start() {
@@ -291,6 +296,16 @@ public class HttpClient {
 			}
 			if (m_keepAlive != null) {
 				dsl.setKeepAlive(m_keepAlive);
+			}
+			if (m_caCertPath != null) {
+				try{
+					File certFile = new File(m_caCertPath);
+					dsl.setSslContext(
+							SslContextBuilder.forClient()
+							.trustManager(certFile).build());
+				} catch (Exception e){
+					LOG.error("Failed to Set SSL Context", e);
+				}
 			}
 			if (m_useInsecureTrustManager != null) {
 				dsl.setUseInsecureTrustManager(m_useInsecureTrustManager);
