@@ -70,7 +70,7 @@ public class HttpClient {
 		m_keepAlive = value;
 	}
 
-	public void enableSSL(String caCertPath) {
+	public void setCACert(String caCertPath) {
 		m_caCertPath = caCertPath;
 	}
 
