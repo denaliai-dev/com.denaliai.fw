@@ -48,7 +48,8 @@ public class HttpClient {
 	private Integer m_maxConnectionsPerHost = Config_MaxConnectionsPerHost;
 	private Boolean m_keepAlive = Config_KeepAlive;
 	private Boolean m_useInsecureTrustManager;
-	private String m_caCertPath;
+	private String m_trustCertPath;
+	private String m_keyCertPath;
 	private String m_keyPath;
 	private String m_passPhrase;
 
@@ -72,8 +73,9 @@ public class HttpClient {
 		m_keepAlive = value;
 	}
 
-	public void setCACert(String caCertPath, String keyPath, String passphrase) {
-		m_caCertPath = caCertPath;
+	public void setCertificate(String trustCertPath, String keyCertPath, String keyPath, String passphrase) {
+		m_trustCertPath = trustCertPath;
+		m_keyCertPath = keyCertPath;
 		m_keyPath = keyPath;
 		m_passPhrase = passphrase;
 	}
@@ -301,13 +303,15 @@ public class HttpClient {
 			if (m_keepAlive != null) {
 				dsl.setKeepAlive(m_keepAlive);
 			}
-			if (m_caCertPath != null) {
+			if (m_trustCertPath != null && m_keyCertPath != null && m_keyPath != null) {
 				try{
-					File certFile = new File(m_caCertPath);
+					File trustCertFile = new File(m_trustCertPath);
+					File keyCertFile = new File(m_keyCertPath);
 					File keyFile = new File(m_keyPath);
 
 					dsl.setSslContext(SslContextBuilder.forClient()
-							.keyManager(certFile, keyFile, m_passPhrase)
+							.keyManager(keyCertFile, keyFile, m_passPhrase)
+							.trustManager(trustCertFile)
 							.build());
 				} catch (Exception e){
 					LOG.error("Failed to Set SSL Context", e);
