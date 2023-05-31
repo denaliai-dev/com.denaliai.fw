@@ -49,6 +49,8 @@ public class HttpClient {
 	private Boolean m_keepAlive = Config_KeepAlive;
 	private Boolean m_useInsecureTrustManager;
 	private String m_caCertPath;
+	private String m_keyPath;
+	private String m_passPhrase;
 
 	public HttpClient() {
 	}
@@ -70,8 +72,10 @@ public class HttpClient {
 		m_keepAlive = value;
 	}
 
-	public void setCACert(String caCertPath) {
+	public void setCACert(String caCertPath, String keyPath, String passphrase) {
 		m_caCertPath = caCertPath;
+		m_keyPath = keyPath;
+		m_passPhrase = passphrase;
 	}
 
 	public Future<Void> start() {
@@ -300,9 +304,11 @@ public class HttpClient {
 			if (m_caCertPath != null) {
 				try{
 					File certFile = new File(m_caCertPath);
-					dsl.setSslContext(
-							SslContextBuilder.forClient()
-							.trustManager(certFile).build());
+					File keyFile = new File(m_keyPath);
+
+					dsl.setSslContext(SslContextBuilder.forClient()
+							.keyManager(certFile, keyFile, m_passPhrase)
+							.build());
 				} catch (Exception e){
 					LOG.error("Failed to Set SSL Context", e);
 				}

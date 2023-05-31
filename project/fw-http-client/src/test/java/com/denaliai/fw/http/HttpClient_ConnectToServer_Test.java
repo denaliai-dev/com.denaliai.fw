@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.LinkedList;
 import java.util.concurrent.CountDownLatch;
 
 public class HttpClient_ConnectToServer_Test extends AbstractTestBase {
