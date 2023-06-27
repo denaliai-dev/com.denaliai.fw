@@ -48,9 +48,9 @@ public class HttpClient {
 	private Integer m_maxConnectionsPerHost = Config_MaxConnectionsPerHost;
 	private Boolean m_keepAlive = Config_KeepAlive;
 	private Boolean m_useInsecureTrustManager;
-	private String m_trustCertPath;
-	private String m_keyCertPath;
-	private String m_keyPath;
+	private String m_trustManagerCertPath;
+	private String m_keyManagerCertPath;
+	private String m_privateKeyPath;
 	private String m_passPhrase;
 
 	public HttpClient() {
@@ -74,9 +74,9 @@ public class HttpClient {
 	}
 
 	public void setCertificate(String trustCertPath, String keyCertPath, String keyPath, String passphrase) {
-		m_trustCertPath = trustCertPath;
-		m_keyCertPath = keyCertPath;
-		m_keyPath = keyPath;
+		m_trustManagerCertPath = trustCertPath;
+		m_keyManagerCertPath = keyCertPath;
+		m_privateKeyPath = keyPath;
 		m_passPhrase = passphrase;
 	}
 
@@ -303,11 +303,11 @@ public class HttpClient {
 			if (m_keepAlive != null) {
 				dsl.setKeepAlive(m_keepAlive);
 			}
-			if (m_trustCertPath != null && m_keyCertPath != null && m_keyPath != null) {
+			if (m_trustManagerCertPath != null && m_keyManagerCertPath != null && m_privateKeyPath != null) {
 				try{
-					File trustCertFile = new File(m_trustCertPath);
-					File keyCertFile = new File(m_keyCertPath);
-					File keyFile = new File(m_keyPath);
+					File trustCertFile = new File(m_trustManagerCertPath);
+					File keyCertFile = new File(m_keyManagerCertPath);
+					File keyFile = new File(m_privateKeyPath);
 
 					dsl.setSslContext(SslContextBuilder.forClient()
 							.keyManager(keyCertFile, keyFile, m_passPhrase)
