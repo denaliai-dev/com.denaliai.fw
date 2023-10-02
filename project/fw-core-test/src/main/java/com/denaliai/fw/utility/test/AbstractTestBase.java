@@ -16,6 +16,7 @@ public abstract class AbstractTestBase {
 	protected static void bootstrap() {
 		System.setProperty("io.netty.leakDetection.level", "PARANOID");
 		System.setProperty("io.netty.leakDetection.targetRecords", Integer.toString(Integer.MAX_VALUE));
+		System.setProperty("io.netty.leakDetection.samplingInterval", "1");
 		System.setProperty("log4j.appConfigurationFile", "test-log4j2.xml");
 		System.setProperty("com.denaliai.fw.logger-level-root", System.getProperty("com.denaliai.fw.logger-level-root", "DEBUG"));
 		ApplicationBootstrap.bootstrap(new String[]{});
