@@ -19,7 +19,7 @@ public class HttpServer_IO_Test extends TestBase {
 		CountDownLatch latch = new CountDownLatch(1);
 		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(1000));
 
-		String responseData = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html");
+		String responseData = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html").body;
 		Assertions.assertEquals("", responseData);
 
 		boolean onConnect = false;
@@ -60,7 +60,7 @@ public class HttpServer_IO_Test extends TestBase {
 			.build();
 		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(1000));
 
-		String responseData = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html");
+		String responseData = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html").body;
 		Assertions.assertEquals("GOOD", responseData);
 
 		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(1000));
