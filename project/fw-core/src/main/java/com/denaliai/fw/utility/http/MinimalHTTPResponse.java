@@ -3,6 +3,7 @@ package com.denaliai.fw.utility.http;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MinimalHTTPResponse {
 	final private Logger LOG;
@@ -13,7 +14,11 @@ public class MinimalHTTPResponse {
 	public String body;
 
 	public MinimalHTTPResponse(Logger logger) {
-		LOG = logger;
+		if(logger == null) {
+			LOG = LoggerFactory.getLogger(MinimalHTTPResponse.class.getName());
+		} else {
+			LOG = logger;
+		}
 	}
 
 	public void appendToBuilder(char[] buffer, int numRead) {
@@ -46,7 +51,7 @@ public class MinimalHTTPResponse {
 
 	private void parseHeadersString() {
 		m_headers = new HashMap<>();
-		if(m_headersString.length() == 0) {
+		if(m_headersString == null || m_headersString.length() == 0) {
 			return;
 		}
 		final StringBuilder sb = new StringBuilder(256);
