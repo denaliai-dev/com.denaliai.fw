@@ -1,5 +1,7 @@
 package com.denaliai.fw.utility.http;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -8,8 +10,7 @@ import org.slf4j.LoggerFactory;
 public class MinimalHTTPResponse {
 	final private Logger LOG;
 	final private StringBuilder m_responseBuilder = new StringBuilder(8096);
-	private String m_headersString;
-	private Map<String,String> m_headers;
+	final private Map<String,String> m_headers = new HashMap<>();
 
 	public String body;
 
@@ -22,62 +23,55 @@ public class MinimalHTTPResponse {
 	}
 
 	public void appendToBuilder(char[] buffer, int numRead) {
-		m_responseBuilder.append(buffer,0,numRead);
+		m_responseBuilder.append(buffer,0, numRead);
 	}
 
 	public void close() {
-		if(LOG.isTraceEnabled()) {
-			LOG.trace("Response:\n'{}'", m_responseBuilder);
-		}
-		// find headers
-		for(int i=0; i<m_responseBuilder.length()-1; i++) {
-			if (m_responseBuilder.charAt(i) == '\r'
-							&& m_responseBuilder.charAt(i+1) == '\n'
-							&& i+3 < m_responseBuilder.length()
-							&& m_responseBuilder.charAt(i+2) == '\r'
-							&& m_responseBuilder.charAt(i+3) == '\n'
-			) {
-				m_headersString = m_responseBuilder.substring(0, i + 4);
-				body = m_responseBuilder.substring(i + 4);
-				break;
-			}
-		}
-		if(body == null) {
-			body = m_responseBuilder.toString();
-		}
+		body = m_responseBuilder.toString();
 		m_responseBuilder.setLength(0);
 	}
 
 	public String getHeader(String name) {
-		if(m_headers == null) {
-			parseHeadersString();
-		}
 		return m_headers.get(name);
 	}
 
-	private void parseHeadersString() {
-		m_headers = new HashMap<>();
-		if(m_headersString == null || m_headersString.length() == 0) {
+	public void processHeader(String headerLine) {
+		if(headerLine.length() == 0) {
 			return;
 		}
-		final StringBuilder sb = new StringBuilder(256);
-		for(int i = 0; i < m_headersString.length(); i++) {
-			final char c = m_headersString.charAt(i);
-			if(c != '\r' && c != '\n') {
-				sb.append(c);
-			} else if(c == '\n' && sb.length() > 0) {
-				final String header = sb.toString();
-				sb.setLength(0);
-				int colonPos = header.indexOf(": ");
-					if(colonPos != -1) {
-						String name = header.substring(0, colonPos);
-						String value = header.substring(colonPos+2);
-						m_headers.put(name.toLowerCase(),value);
-						if(LOG.isDebugEnabled()) {
-							LOG.debug("parsed header '{}': '{}'", name, value);
-						}
-					}
+		final int colonPos = headerLine.indexOf(": ");
+		if(colonPos == -1) {
+			return;
+		}
+		String name = headerLine.substring(0, colonPos);
+		String value = headerLine.substring(colonPos+2);
+		m_headers.put(name.toLowerCase(),value);
+		if(LOG.isDebugEnabled()) {
+			LOG.debug("parsed header '{}': '{}'", name, value);
+		}
+	}
+
+	public void processChunks(InputStream is) throws IOException {
+		final StringBuilder sb = new StringBuilder();
+		while(true) {
+			final char c = (char)is.read();
+			if(c == '\r') {
+				final int size = Integer.parseInt(sb.toString(),16);
+				if(size == 0) {
+					close();
+					return;
+				}
+
+				for(int i = 0; i < size; i++) {
+					final char c2 = (char) is.read();
+					m_responseBuilder.append(c2);
+				}
+
+				is.read(); // \r
+				is.read(); // \n
+				continue;
 			}
+			sb.append(c);
 		}
 	}
 }

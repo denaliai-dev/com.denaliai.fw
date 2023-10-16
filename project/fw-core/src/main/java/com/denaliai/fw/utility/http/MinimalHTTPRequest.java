@@ -1,6 +1,7 @@
 package com.denaliai.fw.utility.http;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.*;
@@ -163,20 +164,50 @@ public class MinimalHTTPRequest {
 						LOG.debug("Reading response");
 					}
 					// Read response
-					final BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), Charset.forName("UTF-8")));
+					final InputStream is = socket.getInputStream();
+					final StringBuilder sb = new StringBuilder();
+					int breakCount = 0;
+
 					try {
-						final char[] buffer = new char[4096];
 						while(true) {
-							final int numRead = in.read(buffer);
-							if (numRead == -1) {
-								break;
+							int b = is.read();
+							if(b == -1) {
+								throw new Exception("Stream ended before headers");
+							} else if(b == '\r') {
+								is.read(); // \n
+								breakCount++;
+								if(breakCount > 1) {
+									break;
+								}
+								response.processHeader(sb.toString());
+								sb.setLength(0);
+							} else {
+								breakCount = 0;
+								sb.append((char)b);
 							}
-							response.appendToBuilder(buffer, numRead);
 						}
 
-						response.close();
+						if(response.getHeader("transfer-encoding").equals("chunked")) {
+							response.processChunks(is);
+						} else {
+							final BufferedReader in = new BufferedReader(new InputStreamReader(is, Charset.forName("UTF-8")));
+							try {
+								final char[] buffer = new char[4096];
+								while(true) {
+									final int numRead = in.read(buffer);
+									if (numRead == -1) {
+										break;
+									}
+									response.appendToBuilder(buffer, numRead);
+								}
+
+								response.close();
+							} finally {
+								in.close();
+							}
+						}
 					} finally {
-						in.close();
+						is.close();
 					}
 				} finally {
 					out.close();
