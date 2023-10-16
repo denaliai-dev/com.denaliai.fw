@@ -26,6 +26,9 @@ public class MinimalHTTPResponse {
 	}
 
 	public void close() {
+		if(LOG.isTraceEnabled()) {
+			LOG.trace("Response:\n'{}'", m_responseBuilder);
+		}
 		// find headers
 		for(int i=0; i<m_responseBuilder.length()-1; i++) {
 			if (m_responseBuilder.charAt(i) == '\r'
