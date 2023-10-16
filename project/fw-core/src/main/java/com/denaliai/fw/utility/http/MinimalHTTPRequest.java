@@ -111,7 +111,7 @@ public class MinimalHTTPRequest {
 
 	static MinimalHTTPResponse execute(final SocketFactory factory, String method, String host, int port, String file, final int readTimeoutInMS, final Logger LOG, final String contentType, final Map<String, String> headers, final String postedData) {
 		final InetAddress addr;
-		final MinimalHTTPResponse response = new MinimalHTTPResponse(LOG);
+		MinimalHTTPResponse response = new MinimalHTTPResponse(LOG);
 		try {
 			addr = InetAddress.getByName(host);
 		} catch (UnknownHostException e) {
@@ -188,7 +188,16 @@ public class MinimalHTTPRequest {
 						}
 
 						if("chunked".equals(response.getHeader("transfer-encoding"))) {
-							response.processChunks(is);
+							final StringBuilder traceBuilder = new StringBuilder();
+							try{
+								response.processChunks(is, traceBuilder);
+							} catch (Throwable t) {
+								LOG.error("Failed parsing chunk");
+								if(LOG.isDebugEnabled()) {
+									LOG.error("failed at:\n'{}'",traceBuilder);
+								}
+								response = null;
+							}
 						} else {
 							final BufferedReader in = new BufferedReader(new InputStreamReader(is, Charset.forName("UTF-8")));
 							try {

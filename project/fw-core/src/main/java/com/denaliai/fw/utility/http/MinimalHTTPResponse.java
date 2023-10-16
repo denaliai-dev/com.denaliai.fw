@@ -51,10 +51,13 @@ public class MinimalHTTPResponse {
 		}
 	}
 
-	public void processChunks(InputStream is) throws IOException {
+	public void processChunks(InputStream is, StringBuilder traceBuilder) throws IOException {
 		final StringBuilder sb = new StringBuilder();
 		while(true) {
 			final char c = (char)is.read();
+			if(LOG.isTraceEnabled()) {
+				traceBuilder.append(c);
+			}
 			if(c == '\r') {
 				final int size = Integer.parseInt(sb.toString(),16);
 				if(size == 0) {
