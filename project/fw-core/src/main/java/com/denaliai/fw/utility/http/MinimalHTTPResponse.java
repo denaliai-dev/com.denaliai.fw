@@ -39,6 +39,9 @@ public class MinimalHTTPResponse {
 				break;
 			}
 		}
+		if(body == null) {
+			body = m_responseBuilder.toString();
+		}
 		m_responseBuilder.setLength(0);
 	}
 
@@ -66,7 +69,7 @@ public class MinimalHTTPResponse {
 					if(colonPos != -1) {
 						String name = header.substring(0, colonPos);
 						String value = header.substring(colonPos+2);
-						m_headers.put(name,value);
+						m_headers.put(name.toLowerCase(),value);
 						if(LOG.isDebugEnabled()) {
 							LOG.debug("parsed header '{}': '{}'", name, value);
 						}

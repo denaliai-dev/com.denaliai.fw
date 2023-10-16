@@ -33,6 +33,23 @@ public abstract class JSONSerializer {
 		}
 	}
 
+	public static Node parseAny(ByteBuf json) throws JsonParseException {
+		try {
+			return parseAny0(json);
+		} catch(Exception ex) {
+			throw new JsonParseException(ex);
+		}
+	}
+
+	private static Node parseAny0(ByteBuf json) throws Exception {
+		JsonParser parser = m_factory.createParser((InputStream)new ByteBufInputStream(json));
+
+		Node node = parseAny(parser);
+
+		parser.close();
+		return node;
+	}
+
 	private static ObjectNode parse0(ByteBuf json) throws Exception {
 		JsonParser parser = m_factory.createParser((InputStream)new ByteBufInputStream(json));
 		if (parser.nextToken() != JsonToken.START_OBJECT) {
@@ -45,6 +62,40 @@ public abstract class JSONSerializer {
 		return node;
 	}
 
+	private static Node parseAny(JsonParser parser) throws Exception {
+		JsonToken token = parser.nextToken();
+		if (token.isStructStart()) {
+			if (token == JsonToken.START_ARRAY) {
+				return parseArray(parser);
+			} else {
+				return parseObject(parser);
+			}
+		} else if (token.isBoolean()) {
+			if (token == JsonToken.VALUE_TRUE) {
+				return JSON_TRUE;
+			} else {
+				return JSON_FALSE;
+			}
+		} else if (token.isNumeric()) {
+			if (token == JsonToken.VALUE_NUMBER_INT) {
+				Node newNode;
+				try {
+					newNode = new IntegerNode(parser.getLongValue());
+				} catch(com.fasterxml.jackson.core.JsonParseException ex) {
+					// JSON can contain integer values greater than the size of a Java long, so treat those as Strings for now
+					newNode = new StringNode(parser.getText());
+				}
+				return newNode;
+			} else {
+				return new FloatingNode(parser.getDoubleValue());
+			}
+		} else if (token == JsonToken.VALUE_NULL) {
+			return JSON_NULL;
+
+		} else {
+			return new StringNode(parser.getText());
+		}
+	}
 
 	private static ObjectNode parseObject(JsonParser parser) throws Exception {
 		ObjectNode node = new ObjectNode();
