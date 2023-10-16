@@ -187,7 +187,7 @@ public class MinimalHTTPRequest {
 							}
 						}
 
-						if(response.getHeader("transfer-encoding").equals("chunked")) {
+						if("chunked".equals(response.getHeader("transfer-encoding"))) {
 							response.processChunks(is);
 						} else {
 							final BufferedReader in = new BufferedReader(new InputStreamReader(is, Charset.forName("UTF-8")));
