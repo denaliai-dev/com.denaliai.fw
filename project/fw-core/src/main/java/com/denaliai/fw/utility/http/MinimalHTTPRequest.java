@@ -173,8 +173,11 @@ public class MinimalHTTPRequest {
 							int b = is.read();
 							if(b == -1) {
 								throw new Exception("Stream ended before headers");
-							} else if(b == '\r') {
-								is.read(); // \n
+							}
+							if(b == '\r') {
+								continue;
+							}
+							if(b == '\n') {
 								breakCount++;
 								if(breakCount > 1) {
 									break;
@@ -192,7 +195,7 @@ public class MinimalHTTPRequest {
 							try{
 								response.processChunks(is, traceBuilder);
 							} catch (Throwable t) {
-								LOG.error("Failed parsing chunk");
+								LOG.error("Failed parsing chunk", t);
 								if(LOG.isDebugEnabled()) {
 									LOG.error("failed at:\n'{}'",traceBuilder);
 								}

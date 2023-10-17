@@ -1,6 +1,5 @@
 package com.denaliai.fw.utility.http;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
@@ -51,27 +50,36 @@ public class MinimalHTTPResponse {
 		}
 	}
 
-	public void processChunks(InputStream is, StringBuilder traceBuilder) throws IOException {
+	public void processChunks(InputStream is, StringBuilder traceBuilder) throws Exception {
 		final StringBuilder sb = new StringBuilder();
 		while(true) {
 			final char c = (char)is.read();
 			if(LOG.isTraceEnabled()) {
 				traceBuilder.append(c);
 			}
-			if(c == '\r') {
+			if (c == '\r') {
+				continue;
+			}
+			if(c == '\n') {
+				if(sb.length() == 0) {
+					continue;
+				}
 				final int size = Integer.parseInt(sb.toString(),16);
+				sb.setLength(0);
 				if(size == 0) {
 					close();
 					return;
 				}
 
-				for(int i = 0; i < size; i++) {
-					final char c2 = (char) is.read();
-					m_responseBuilder.append(c2);
+				final byte[] buf = new byte[size];
+				final int numRead = is.read(buf);
+				if (numRead != size) {
+					if(LOG.isTraceEnabled()) {
+						LOG.error("failed at:\n{}", traceBuilder.toString());
+					}
+					throw new Exception("Error in processing, size != remaining bytes");
 				}
-
-				is.read(); // \r
-				is.read(); // \n
+				m_responseBuilder.append(new String(buf));
 				continue;
 			}
 			sb.append(c);
