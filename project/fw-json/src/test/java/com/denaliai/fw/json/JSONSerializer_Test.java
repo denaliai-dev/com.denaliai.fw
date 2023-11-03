@@ -100,6 +100,12 @@ public class JSONSerializer_Test extends TestBase {
 	}
 
 	@Test
+	public void testUnicode() throws Exception {
+		JSONSerializer.ObjectNode node = parse("{\"test\": \"昨日\"}");
+		Assertions.assertEquals("昨日", node.get("test").asString().value());
+	}
+
+	@Test
 	public void testAllNodeTypesForAny() throws JSONSerializer.JsonParseException, JSONSerializer.JsonUseException {
 		JSONSerializer.Node node = parseAny("{"
 						+ "\"boolTrue\": true,"
