@@ -231,7 +231,7 @@ public class MinimalHTTPRequest {
 				LOG.debug("Done");
 			}
 		} catch(Throwable t) {
-			LOG.error("", t);
+			LOG.error("host={} addr={}", host, addr, t);
 		}
 
 		return response;
