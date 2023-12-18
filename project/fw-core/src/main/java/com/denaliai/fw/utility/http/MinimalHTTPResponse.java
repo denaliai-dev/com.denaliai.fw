@@ -12,6 +12,7 @@ public class MinimalHTTPResponse {
 	final private Map<String,String> m_headers = new HashMap<>();
 
 	public String body;
+	public Throwable error;
 
 	public MinimalHTTPResponse(Logger logger) {
 		if(logger == null) {
@@ -19,6 +20,10 @@ public class MinimalHTTPResponse {
 		} else {
 			LOG = logger;
 		}
+	}
+	public MinimalHTTPResponse(Logger logger, Exception error) {
+		this(logger);
+		this.error = error;
 	}
 
 	public void appendToBuilder(char[] buffer, int numRead) {

@@ -28,8 +28,10 @@ public class MinimalHTTPRequest {
 		try {
 			url = new URL(urlString);
 		} catch (MalformedURLException e) {
-			LOG.error("", e);
-			throw new IllegalArgumentException("Could not parse URL '" + urlString + "'", e);
+			if(LOG.isDebugEnabled()) {
+				LOG.error("", e);
+			}
+			return new MinimalHTTPResponse(LOG, new IllegalArgumentException("Could not parse URL '" + urlString + "'", e));
 		}
 		return get(url, headers);
 	}
@@ -74,8 +76,10 @@ public class MinimalHTTPRequest {
 		try {
 			url = new URL(urlString);
 		} catch (MalformedURLException e) {
-			LOG.error("", e);
-			throw new IllegalArgumentException("Could not parse URL '" + urlString + "'", e);
+			if(LOG.isDebugEnabled()) {
+				LOG.error("", e);
+			}
+			return new MinimalHTTPResponse(LOG, new IllegalArgumentException("Could not parse URL '" + urlString + "'", e));
 		}
 		return post(url, contentType, postedData);
 	}
@@ -115,8 +119,11 @@ public class MinimalHTTPRequest {
 		try {
 			addr = InetAddress.getByName(host);
 		} catch (UnknownHostException e) {
-			LOG.error("", e);
-			throw new IllegalArgumentException("Could not resolve host '" + host + "'", e);
+			if(LOG.isDebugEnabled()) {
+				LOG.error("", e);
+			}
+			response.error = new IllegalArgumentException("Could not resolve host '" + host + "'", e);
+			return response;
 		}
 		try {
 			if (LOG.isDebugEnabled()) {
@@ -172,7 +179,8 @@ public class MinimalHTTPRequest {
 						while(true) {
 							int b = is.read();
 							if(b == -1) {
-								throw new Exception("Stream ended before headers");
+								response.error = new Exception("Stream ended before headers");
+								return response;
 							}
 							if(b == '\r') {
 								continue;
@@ -195,11 +203,11 @@ public class MinimalHTTPRequest {
 							try{
 								response.processChunks(is, traceBuilder);
 							} catch (Throwable t) {
-								LOG.error("Failed parsing chunk", t);
 								if(LOG.isDebugEnabled()) {
-									LOG.error("failed at:\n'{}'",traceBuilder);
+									LOG.error("Failed parsing chunk", t);
+									LOG.error("at:\n'{}'",traceBuilder);
 								}
-								response = null;
+								response.error = t;
 							}
 						} else {
 							final BufferedReader in = new BufferedReader(new InputStreamReader(is, Charset.forName("UTF-8")));
@@ -231,7 +239,10 @@ public class MinimalHTTPRequest {
 				LOG.debug("Done");
 			}
 		} catch(Throwable t) {
-			LOG.error("host={} addr={}", host, addr, t);
+			if(LOG.isDebugEnabled()) {
+				LOG.error("host={} addr={}", host, addr, t);
+			}
+			response.error = t;
 		}
 
 		return response;
