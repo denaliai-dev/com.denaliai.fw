@@ -17,7 +17,6 @@ import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.stream.ChunkedNioFile;
 import io.netty.handler.stream.ChunkedStream;
 import io.netty.handler.stream.ChunkedWriteHandler;
-import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.AttributeKey;
@@ -431,13 +430,13 @@ public final class HttpServer {
 				final Connection conn = ctx.channel().attr(CONNECTION).get();
 				if (conn == null) {
 					if (LOG.isDebugEnabled()) {
-						LOG.error("[{}] Read timeout exception, closing connection", ctx.channel().remoteAddress().toString(), cause);
+						LOG.error("[{}] Read timeout exception, closing connection", ctx.channel().remoteAddress().toString());
 					}
 					ctx.close();
 					return;
 				}
 				if (LOG.isDebugEnabled()) {
-					LOG.debug("[{}] Read timeout exception, closing connection", conn.remoteHostAddress(), cause);
+					LOG.debug("[{}] Read timeout exception, closing connection", conn.remoteHostAddress());
 				}
 				conn.callOnFailure(cause);
 				ctx.close();
@@ -621,7 +620,7 @@ public final class HttpServer {
 			}
 			try {
 				// Need to leave the handler in its place, so replace it with something that does nothing
-				m_channel.pipeline().replace("read-timeout", "read-timeout", new IdleStateHandler(0, 0, 0));
+				m_channel.pipeline().replace("read-timeout", "read-timeout", new DoNothingHandler());
 				m_updatedReadTimeout = true;
 			} catch(NoSuchElementException ex) {
 				// This is fine, it is an edge failure case when the connection is closed by the time we get here
@@ -717,6 +716,13 @@ public final class HttpServer {
 					if (m_context == null) {
 						// The client disconnected, simply throw away the response
 						m_earlyDisconnects.increment();
+						if (LOG.isTraceEnabled()) {
+							if (((UserRequestState) msg).m_httpFullResponse != null) {
+								traceLogFullResponse((UserRequestState) msg);
+							} else {
+								traceLogHeaderAndBody((UserRequestState) msg);
+							}
+						}
 						((UserRequestState)msg).endRequest();
 
 					} else if (m_currentRequest != msg) {
@@ -750,7 +756,11 @@ public final class HttpServer {
 			}
 		}
 
-		public void writeFullResponse(UserRequestState state) {
+		private void traceLogFullResponse(UserRequestState state) {
+			LOG.trace("[{}] early disonnect. Response:\n{}", m_connectionToString, state.m_httpFullResponse);
+		}
+
+		private void writeFullResponse(UserRequestState state) {
 			if (LOG.isDebugEnabled()) {
 				LOG.debug("[{}] writeAndFlush({})", m_connectionToString, state.m_httpFullResponse.status().code());
 			}
@@ -783,7 +793,11 @@ public final class HttpServer {
 			state.m_httpFullResponse = null;
 		}
 
-		public void writeHeaderAndBody(UserRequestState state) {
+		private void traceLogHeaderAndBody(UserRequestState state) {
+			LOG.trace("[{}] early disonnect. Header:\n{}\nBody:\n{}", m_connectionToString, state.m_httpResponseHeader, state.m_httpResponseBody);
+		}
+
+		private void writeHeaderAndBody(UserRequestState state) {
 			if (LOG.isDebugEnabled()) {
 				LOG.debug("[{}] writeAndFlush(<chunked data>)", m_connectionToString);
 			}
