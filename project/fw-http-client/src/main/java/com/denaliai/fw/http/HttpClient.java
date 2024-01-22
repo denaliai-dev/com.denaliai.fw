@@ -348,7 +348,8 @@ public class HttpClient {
 
 		void setResponseFuture(ListenableFuture<Response> responseFuture) {
 			m_responseFuture = responseFuture;
-			m_responseFuture.addListener(this, Application.getTaskPool());
+			// It appears that the executor passed in here is being ignored
+			m_responseFuture.addListener(this, null);
 		}
 
 		/**
@@ -356,6 +357,10 @@ public class HttpClient {
 		 */
 		@Override
 		public void run() {
+			Application.getTaskPool().execute(this::_run);
+		}
+
+		private void _run() {
 			if (LOG.isDebugEnabled()) {
 				LOG.debug("[{}] Request complete", m_requestId);
 			}
