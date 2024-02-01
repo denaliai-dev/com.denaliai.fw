@@ -310,6 +310,7 @@ public final class MetricsEngine {
 
 	public interface IMetricTimer {
 		void close();
+		long elapsedTimeMS();
 	}
 	static final class TimerInstance implements IMetricTimer {
 		private final Recycler.Handle<TimerInstance> m_handle;
@@ -336,6 +337,12 @@ public final class MetricsEngine {
 			return endTime() - m_start;
 		}
 
+		@Override
+		public long elapsedTimeMS() {
+			return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - m_start);
+		}
+
+		@Override
 		public void close() {
 			m_endTime = -1;
 			m_handle.recycle(this);

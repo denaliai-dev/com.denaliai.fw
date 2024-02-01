@@ -69,6 +69,10 @@ public final class HttpServer {
 	private final ValueMetric m_responseDataSize;
 
 	private final Logger LOG;
+	private final Logger DATA_LOG;
+	private final Logger CONNECTION_LOG;
+	private final Logger EARLY_DISCONNECT_LOG;
+	private final Logger REQUEST_LOG;
 	private final ServerBootstrap m_serverBootstrap = new ServerBootstrap();
 	private final ConnectionInboundMsgHandler m_connectionMsgHandler = new ConnectionInboundMsgHandler();
 	private final ByteCounterMsgHandler m_childSocketByteCounter = new ByteCounterMsgHandler();
@@ -91,7 +95,13 @@ public final class HttpServer {
 	private volatile ServerState m_serverState;
 
 	private HttpServer(HttpServerBuilder builder) {
-		LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + "." + builder.m_loggerNameSuffix);
+		final String logRoot = HttpServer.class.getCanonicalName() + "." + builder.m_loggerNameSuffix;
+		LOG = LoggerFactory.getLogger(logRoot);
+		CONNECTION_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".connection" + "." + builder.m_loggerNameSuffix);
+		EARLY_DISCONNECT_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".early-disconnect" + "." + builder.m_loggerNameSuffix);
+		REQUEST_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".request" + "." + builder.m_loggerNameSuffix);
+		DATA_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".data" + "." + builder.m_loggerNameSuffix);
+
 		if (LOG.isTraceEnabled()) {
 			LOG.trace("Setting up handlers");
 		}
@@ -310,12 +320,12 @@ public final class HttpServer {
 			if (m_sslContext != null) {
 				pipeline.addLast("sslEngine", sslHandler());
 			}
-			if (LOG.isTraceEnabled()) {
-				pipeline.addLast("data-logger", new DataLogHandler(LOG));
+			if (DATA_LOG.isTraceEnabled()) {
+				pipeline.addLast("data-logger", new DataLogHandler(DATA_LOG));
 			}
 			pipeline.addLast("read-timeout", new ReadTimeoutHandler(m_readTimeoutInMS, TimeUnit.MILLISECONDS));
 			pipeline.addLast("codec", new HttpServerCodec(/*4096, 8192, 8192*/)); // TODO: make these configurable
-			if (!LOG.isTraceEnabled()) {
+			if (!DATA_LOG.isTraceEnabled()) {
 				// Need to prevent compressing so we can log the uncompressed buffers
 				pipeline.addLast("compressor", new HttpContentCompressor());
 			}
@@ -387,24 +397,6 @@ public final class HttpServer {
 					req.release();
 					ctx.close();
 					return;
-				}
-
-				// TODO THIS IS NEEDED FOR SENDING MULTIPLE REQUESTS ON THE SAME CONNECTION <---------------------------------------------------------------------------------------------------------------------
-				// We have the full message, no need for timeout anymore
-				//ctx.pipeline().remove("read-timeout");
-
-				if (LOG.isDebugEnabled()) {
-					final StringBuilder sb = new StringBuilder();
-					final HttpHeaders headers = req.headers();
-					if (!headers.isEmpty()) {
-						sb.append("\r\n");
-						for (Map.Entry<String, String> h: headers) {
-							CharSequence key = h.getKey();
-							CharSequence value = h.getValue();
-							sb.append('\t').append(key).append(" = ").append(value).append("\r\n");
-						}
-					}
-					LOG.info("[{}] {} {} {}{}", ctx.channel().remoteAddress().toString(), req.method(), req.protocolVersion(), req.uri(), sb);
 				}
 				conn.callOnRequest(req);
 			} else {
@@ -576,10 +568,14 @@ public final class HttpServer {
 
 	private static final Object m_onConnect = new Object();
 	private static final Object m_onDisconnect = new Object();
+	private static final AtomicInteger m_connectionIdSrc = new AtomicInteger();
+	private static final AtomicInteger m_requestIdSrc = new AtomicInteger();
 
 	private final class Connection extends PerpetualWork implements ISocketConnection {
 		private final Queue<Object> m_msgQueue = PlatformDependent.newMpscQueue();
+		private final long m_connectionId;
 		private final String m_connectionToString;
+		private final long m_connectedAtMS;
 		private volatile Channel m_channel;
 
 		private volatile UserRequestState m_currentRequest;
@@ -588,8 +584,10 @@ public final class HttpServer {
 		private boolean m_updatedReadTimeout;
 
 		Connection(String connectionToString, Channel channel) {
+			m_connectionId = m_connectionIdSrc.incrementAndGet();
 			m_connectionToString = connectionToString;
 			m_channel = channel;
+			m_connectedAtMS = System.currentTimeMillis();
 		}
 
 		void callOnConnect() {
@@ -633,11 +631,16 @@ public final class HttpServer {
 				m_updatedReadTimeout = false;
 				try {
 					m_channel.pipeline().replace("read-timeout", "read-timeout", new ReadTimeoutHandler(m_readTimeoutInMS, TimeUnit.MILLISECONDS));
-				} catch(NoSuchElementException ex) {
+				} catch (NoSuchElementException ex) {
 					// This is fine, it is an edge failure case most likely due to a closing channel/connection
 					m_context.close(); // Let's just make sure we are closing
 				}
 			}
+		}
+
+		@Override
+		public long connectionId() {
+			return m_connectionId;
 		}
 
 		@Override
@@ -676,6 +679,9 @@ public final class HttpServer {
 				}
 				if (msg == m_onConnect) {
 					try {
+						if (CONNECTION_LOG.isInfoEnabled()) {
+							CONNECTION_LOG.info("[{}] connection from {}", connectionId(), remoteHostAddress());
+						}
 						m_connectHandler.onConnect(this);
 					} catch (Throwable t) {
 						LOG.warn("Uncaught exception from " + m_connectHandler.getClass().getName(), t);
@@ -683,6 +689,13 @@ public final class HttpServer {
 
 				} else if (msg == m_onDisconnect) {
 					try {
+						if (CONNECTION_LOG.isInfoEnabled()) {
+							if (m_currentRequest != null) {
+								CONNECTION_LOG.warn("[{}] disconnected from {} after {} ms (there is still a running request {})", connectionId(), remoteHostAddress(), System.currentTimeMillis() - m_connectedAtMS, m_currentRequest.requestId());
+							} else {
+								CONNECTION_LOG.info("[{}] disconnected from {} after {} ms", connectionId(), remoteHostAddress(), System.currentTimeMillis() - m_connectedAtMS);
+							}
+						}
 						m_disconnectHandler.onDisconnect(this);
 					} catch (Throwable t) {
 						LOG.warn("Uncaught exception from " + m_disconnectHandler.getClass().getName(), t);
@@ -694,11 +707,31 @@ public final class HttpServer {
 
 				} else if (msg instanceof FullHttpRequest) {
 					if (m_currentRequest != null) {
+						REQUEST_LOG.error("[{}-{}] previous request never responded: {} {}", connectionId(), m_currentRequest.requestId(), m_currentRequest.requestMethod(), m_currentRequest.requestURI());
 						// Previous request never finished
 						m_currentRequest.endRequest();
 					}
 					m_currentRequest = new UserRequestState((FullHttpRequest)msg);
+					if (REQUEST_LOG.isDebugEnabled()) {
+						final StringBuilder sb = new StringBuilder();
+						final HttpHeaders headers = ((FullHttpRequest)msg).headers();
+						if (!headers.isEmpty()) {
+							sb.append("\r\n");
+							for (Map.Entry<String, String> h: headers) {
+								CharSequence key = h.getKey();
+								CharSequence value = h.getValue();
+								sb.append('\t').append(key).append(" = ").append(value).append("\r\n");
+							}
+						}
+						REQUEST_LOG.debug("[{}-{}] {} {} {}{}", connectionId(), m_currentRequest.requestId(), m_currentRequest.requestMethod(), m_currentRequest.m_httpRequestProtocolVersion, m_currentRequest.requestURI(), sb);
+					} else if (REQUEST_LOG.isInfoEnabled()) {
+						REQUEST_LOG.info("[{}-{}] {} {}", connectionId(), m_currentRequest.requestId(), m_currentRequest.requestMethod(), m_currentRequest.requestURI());
+					}
+
 					if (!((FullHttpRequest)msg).decoderResult().isSuccess()) {
+						if (REQUEST_LOG.isInfoEnabled()) {
+							REQUEST_LOG.info("[{}-{}] BAD_REQUEST due to decoder failure", connectionId(), m_currentRequest.requestId());
+						}
 						m_currentRequest.respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
 
 					} else {
@@ -716,16 +749,22 @@ public final class HttpServer {
 					if (m_context == null) {
 						// The client disconnected, simply throw away the response
 						m_earlyDisconnects.increment();
-						if (LOG.isTraceEnabled()) {
+						if (EARLY_DISCONNECT_LOG.isTraceEnabled()) {
 							if (((UserRequestState) msg).m_httpFullResponse != null) {
 								traceLogFullResponse((UserRequestState) msg);
 							} else {
 								traceLogHeaderAndBody((UserRequestState) msg);
 							}
+						} else if (EARLY_DISCONNECT_LOG.isInfoEnabled()) {
+							EARLY_DISCONNECT_LOG.info("[{}-{}] early disconnect after {} ms", connectionId(), m_currentRequest.requestId(), m_currentRequest.elapsedTimeMS());
+						}
+						if (REQUEST_LOG.isInfoEnabled()) {
+							REQUEST_LOG.info("[{}-{}] early disconnected response after {} ms", connectionId(), ((UserRequestState)msg).requestId(), ((UserRequestState)msg).elapsedTimeMS());
 						}
 						((UserRequestState)msg).endRequest();
 
 					} else if (m_currentRequest != msg) {
+						REQUEST_LOG.error("[{}-{}] responded request isn't current: {} {}", connectionId(), ((UserRequestState)msg).requestId(), ((UserRequestState)msg).requestMethod(), ((UserRequestState)msg).requestURI());
 						// Responded request isn't the current
 						((UserRequestState)msg).endRequest();
 
@@ -744,6 +783,12 @@ public final class HttpServer {
 					// The user may hold onto the objects passed in and choose to reply later
 					// TODO need to handle breaking the association when we close this associated connection <---------------------------------------------------------------
 					try {
+						if (LOG.isDebugEnabled()) {
+							LOG.debug("[{}] onFailure()", remoteHostAddress(), (Throwable)msg);
+						}
+						if (CONNECTION_LOG.isInfoEnabled()) {
+							CONNECTION_LOG.info("[{}] exception in socket", connectionId());
+						}
 						m_failureHandler.onFailure((Throwable) msg, this);
 					} catch (Throwable t) {
 						LOG.warn("Uncaught exception from " + m_failureHandler.getClass().getName(), t);
@@ -757,12 +802,13 @@ public final class HttpServer {
 		}
 
 		private void traceLogFullResponse(UserRequestState state) {
-			LOG.trace("[{}] early disonnect. Response:\n{}", m_connectionToString, state.m_httpFullResponse);
+			EARLY_DISCONNECT_LOG.trace("[{}-{}] early disconnect after {} ms. Response:\n{}", connectionId(), state.requestId(), state.m_requestTimer.elapsedTimeMS(), state.m_httpFullResponse);
 		}
 
 		private void writeFullResponse(UserRequestState state) {
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("[{}] writeAndFlush({})", m_connectionToString, state.m_httpFullResponse.status().code());
+			final int httpResponseCode = state.m_httpFullResponse.status().code();
+			if (CONNECTION_LOG.isDebugEnabled()) {
+				CONNECTION_LOG.debug("[{}-{}] writeAndFlush({})", connectionId(), state.requestId(), httpResponseCode);
 			}
 			// Since this happens only once in a Connection and connections are created PER request,
 			// its ok to use the lambda here since it would be a wash to create a class to wrap it
@@ -776,6 +822,12 @@ public final class HttpServer {
 			}
 			try {
 				m_context.writeAndFlush(state.m_httpFullResponse).addListener((f) -> {
+					if (CONNECTION_LOG.isDebugEnabled()) {
+						CONNECTION_LOG.debug("[{}-{}] writeAndFlush() done", connectionId(), state.requestId());
+					}
+					if (REQUEST_LOG.isInfoEnabled()) {
+						REQUEST_LOG.info("[{}-{}] responded {} after {} ms", connectionId(), state.requestId(), httpResponseCode, requestTimer.elapsedTimeMS());
+					}
 					if (requestTimer != null) {
 						if (f.isSuccess()) {
 							m_requestRate.record(requestTimer);
@@ -788,26 +840,27 @@ public final class HttpServer {
 					}
 				});
 			} catch(Exception ex) {
-				LOG.error("[{}] Exception writing response", m_connectionToString, ex);
+				LOG.error("[{}-{}] Exception writing response", connectionId(), state.requestId(), ex);
 			}
 			state.m_httpFullResponse = null;
 		}
 
 		private void traceLogHeaderAndBody(UserRequestState state) {
-			LOG.trace("[{}] early disonnect. Header:\n{}\nBody:\n{}", m_connectionToString, state.m_httpResponseHeader, state.m_httpResponseBody);
+			EARLY_DISCONNECT_LOG.trace("[{}-{}] early disconnect afger {} ms. Header:\n{}\nBody:\n{}", connectionId(), state.requestId(), state.m_requestTimer.elapsedTimeMS(), state.m_httpResponseHeader, state.m_httpResponseBody);
 		}
 
 		private void writeHeaderAndBody(UserRequestState state) {
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("[{}] writeAndFlush(<chunked data>)", m_connectionToString);
+			if (CONNECTION_LOG.isDebugEnabled()) {
+				CONNECTION_LOG.debug("[{}-{}] writeAndFlush(<chunked data>)", connectionId(), state.requestId());
 			}
 			// Since this happens only once in a Connection and connections are created PER request,
 			// its ok to use the lambda here since it would be a wash to create a class to wrap it
 			final MetricsEngine.IMetricTimer requestTimer = state.m_requestTimer;
 			state.m_requestTimer = null;
 
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("[{}] write({})", m_connectionToString, state.m_httpResponseHeader.status().code());
+			final int httpResponseCode = state.m_httpResponseHeader.status().code();
+			if (CONNECTION_LOG.isDebugEnabled()) {
+				CONNECTION_LOG.debug("[{}-{}] write({})", connectionId(), state.requestId(), httpResponseCode);
 			}
 			final boolean shuttingDown = (m_stopDonePromise != null);
 			// If we are shutting down, need to make sure we close the connection (after this request is sent)
@@ -818,6 +871,12 @@ public final class HttpServer {
 			try {
 				m_context.write(state.m_httpResponseHeader);
 				m_context.writeAndFlush(state.m_httpResponseBody).addListener((f) -> {
+					if (CONNECTION_LOG.isDebugEnabled()) {
+						CONNECTION_LOG.debug("[{}-{}] write() done", connectionId(), state.requestId());
+					}
+					if (REQUEST_LOG.isInfoEnabled()) {
+						REQUEST_LOG.info("[{}-{}] responded {} after {} ms", connectionId(), state.requestId(), httpResponseCode, requestTimer.elapsedTimeMS());
+					}
 					if (requestTimer != null) {
 						if (f.isSuccess()) {
 							m_requestRate.record(requestTimer);
@@ -831,7 +890,7 @@ public final class HttpServer {
 					}
 				});
 			} catch(Exception ex) {
-				LOG.error("[{}] Exception writing response", m_connectionToString, ex);
+				LOG.error("[{}-{}] Exception writing response", connectionId(), state.requestId(), ex);
 			}
 			state.m_httpResponseHeader = null;
 			state.m_httpResponseBody = null;
@@ -840,6 +899,7 @@ public final class HttpServer {
 		private class UserRequestState implements IHttpRequest, IHttpResponse {
 			private final HttpVersion m_httpRequestProtocolVersion;
 			private final HttpMethod m_httpRequestMethod;
+			private final long m_requestId;
 			private FullHttpRequest m_httpRequest;
 			private MetricsEngine.IMetricTimer m_requestTimer;
 			private Map<String,String> m_responseHeaders;
@@ -848,13 +908,31 @@ public final class HttpServer {
 			private HttpChunkedInput m_httpResponseBody;
 
 			private UserRequestState(FullHttpRequest request) {
+				m_requestId = m_requestIdSrc.incrementAndGet();
 				m_httpRequest = request;
 				m_httpRequestProtocolVersion = m_httpRequest.protocolVersion();
 				m_httpRequestMethod = m_httpRequest.method();
 				m_requestTimer = MetricsEngine.startTimer();
 			}
 
-			public synchronized void endRequest() {
+			@Override
+			public long connectionId() {
+				return m_connectionId;
+			}
+
+			@Override
+			public long requestId() {
+				return m_requestId;
+			}
+
+			long elapsedTimeMS() {
+				if (m_requestTimer != null) {
+					return m_requestTimer.elapsedTimeMS();
+				}
+				return -1;
+			}
+
+			public void endRequest() {
 				ReferenceCountUtil.safeRelease(m_httpFullResponse);
 				m_httpFullResponse = null;
 				ReferenceCountUtil.safeRelease(m_httpResponseHeader);
@@ -1234,6 +1312,8 @@ public final class HttpServer {
 		String value();
 	}
 	public interface IHttpRequest {
+		long connectionId();
+		long requestId();
 		String remoteHostAddress();
 		String requestMethod();
 		String requestURI();
@@ -1242,6 +1322,7 @@ public final class HttpServer {
 	}
 
 	public interface ISocketConnection {
+		long connectionId();
 		String remoteHostAddress();
 	}
 	public interface IHttpResponse {
@@ -1276,23 +1357,14 @@ public final class HttpServer {
 
 		@Override
 		public void onConnect(ISocketConnection connection) {
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("[{}] onConnect()", connection.remoteHostAddress());
-			}
 		}
 
 		@Override
 		public void onDisconnect(ISocketConnection connection) {
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("[{}] onDisconnect()", connection.remoteHostAddress());
-			}
 		}
 
 		@Override
 		public void onFailure(Throwable cause, ISocketConnection connection) {
-			if (LOG.isDebugEnabled()) {
-				LOG.debug("[{}] onFailure()", connection.remoteHostAddress(), cause);
-			}
 		}
 
 		@Override

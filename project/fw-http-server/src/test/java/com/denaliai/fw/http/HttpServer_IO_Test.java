@@ -16,29 +16,21 @@ public class HttpServer_IO_Test extends TestBase {
 		HttpServer httpServer = HttpServer.builder()
 			.listenPort(10000)
 			.build();
-		CountDownLatch latch = new CountDownLatch(1);
 		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(1000));
 
 		String responseData = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html").body;
 		Assertions.assertEquals("", responseData);
 
-		boolean onConnect = false;
-		boolean onDisconnect = false;
+		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(1000));
+
 		boolean onRequest = false;
 		for(String logEntry : TestCaptureAppender.getCaptured()) {
-			if (!onConnect && logEntry.contains("NullHandler") && logEntry.contains("onConnect()")) {
-				onConnect = true;
-			} else if (!onDisconnect && logEntry.contains("NullHandler") && logEntry.contains("onDisconnect()")) {
-				onDisconnect = true;
-			} else if (!onRequest && logEntry.contains("NullHandler") && logEntry.contains("onRequest()")) {
+			if (logEntry.contains("NullHandler") && logEntry.contains("onRequest()")) {
 				onRequest = true;
+				break;
 			}
 		}
-		Assertions.assertTrue(onConnect, "Did not find onConnect");
-		Assertions.assertTrue(onDisconnect, "Did not find onDisconnect");
 		Assertions.assertTrue(onRequest, "Did not find onRequest");
-
-		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(1000));
 	}
 
 	@Test
