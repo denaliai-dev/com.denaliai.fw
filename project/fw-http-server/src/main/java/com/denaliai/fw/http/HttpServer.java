@@ -38,6 +38,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
@@ -904,6 +905,7 @@ public final class HttpServer {
 			private final HttpVersion m_httpRequestProtocolVersion;
 			private final HttpMethod m_httpRequestMethod;
 			private final long m_requestId;
+			private AtomicBoolean m_responded = new AtomicBoolean();
 			private FullHttpRequest m_httpRequest;
 			private MetricsEngine.IMetricTimer m_requestTimer;
 			private Map<String,String> m_responseHeaders;
@@ -994,7 +996,7 @@ public final class HttpServer {
 
 			@Override
 			public void respondOkWithFile(File file, boolean downloadFile, int httpCacheSeconds) {
-				if (m_httpRequest == null) {
+				if (!m_responded.compareAndSet(false, true)) {
 					throw new IllegalStateException("Already responded");
 				}
 				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
@@ -1073,15 +1075,11 @@ public final class HttpServer {
 				m_httpResponseBody = responseBody;
 				m_msgQueue.add(this);
 				requestMoreWork();
-				if (m_httpRequest != null) {
-					ReferenceCountUtil.safeRelease(m_httpRequest);
-					m_httpRequest = null;
-				}
 			}
 
 			@Override
 			public void respondOkWithFileData(ByteBuf data, String fileName, long lastModifiedTime, boolean downloadFile, int httpCacheSeconds) {
-				if (m_httpRequest == null) {
+				if (!m_responded.compareAndSet(false, true)) {
 					throw new IllegalStateException("Already responded");
 				}
 				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
@@ -1146,15 +1144,11 @@ public final class HttpServer {
 				m_httpResponseBody = responseBody;
 				m_msgQueue.add(this);
 				requestMoreWork();
-				if (m_httpRequest != null) {
-					ReferenceCountUtil.safeRelease(m_httpRequest);
-					m_httpRequest = null;
-				}
 			}
 
 			@Override
 			public void respond(HttpResponseStatus httpResponseStatus, ByteBuf data) {
-				if (m_httpRequest == null) {
+				if (!m_responded.compareAndSet(false, true)) {
 					throw new IllegalStateException("Already responded");
 				}
 				DefaultFullHttpResponse response = new DefaultFullHttpResponse(m_httpRequestProtocolVersion, httpResponseStatus, data);
@@ -1173,10 +1167,6 @@ public final class HttpServer {
 				m_httpFullResponse = response;
 				m_msgQueue.add(this);
 				requestMoreWork();
-				if (m_httpRequest != null) {
-					ReferenceCountUtil.safeRelease(m_httpRequest);
-					m_httpRequest = null;
-				}
 			}
 
 			private void setCORSHeaders(HttpHeaders headers) {
