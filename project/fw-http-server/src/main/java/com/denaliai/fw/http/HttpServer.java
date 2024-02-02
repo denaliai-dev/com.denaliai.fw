@@ -386,7 +386,7 @@ public final class HttpServer {
 
 			if (msg instanceof FullHttpRequest) {
 				// This can be called multiple times if multiple requests are sent on the same connection!!
-				FullHttpRequest req = (FullHttpRequest)msg;
+				final FullHttpRequest req = (FullHttpRequest)msg;
 				m_newRequests.increment();
 
 				if (!req.decoderResult().isSuccess()) {
@@ -397,6 +397,10 @@ public final class HttpServer {
 					req.release();
 					ctx.close();
 					return;
+				}
+
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("[{}] {} {} {}", ctx.channel().remoteAddress().toString(), req.method(), req.protocolVersion(), req.uri());
 				}
 				conn.callOnRequest(req);
 			} else {
@@ -720,7 +724,7 @@ public final class HttpServer {
 							for (Map.Entry<String, String> h: headers) {
 								CharSequence key = h.getKey();
 								CharSequence value = h.getValue();
-								sb.append('\t').append(key).append(" = ").append(value).append("\r\n");
+								sb.append('\t').append(key).append(" = '").append(value).append("'\r\n");
 							}
 						}
 						REQUEST_LOG.debug("[{}-{}] {} {} {}{}", connectionId(), m_currentRequest.requestId(), m_currentRequest.requestMethod(), m_currentRequest.m_httpRequestProtocolVersion, m_currentRequest.requestURI(), sb);
