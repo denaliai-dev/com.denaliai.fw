@@ -696,7 +696,7 @@ public final class HttpServer {
 					try {
 						if (CONNECTION_LOG.isInfoEnabled()) {
 							if (m_currentRequest != null) {
-								CONNECTION_LOG.warn("[{}] disconnected from {} after {} ms (there is still a running request {})", connectionId(), remoteHostAddress(), System.currentTimeMillis() - m_connectedAtMS, m_currentRequest.requestId());
+								CONNECTION_LOG.warn("[{}] disconnected from {} after {} ms (there is still a request {} running for {} ms)", connectionId(), remoteHostAddress(), System.currentTimeMillis() - m_connectedAtMS, m_currentRequest.requestId(), m_currentRequest.elapsedTimeMS());
 							} else {
 								CONNECTION_LOG.info("[{}] disconnected from {} after {} ms", connectionId(), remoteHostAddress(), System.currentTimeMillis() - m_connectedAtMS);
 							}
