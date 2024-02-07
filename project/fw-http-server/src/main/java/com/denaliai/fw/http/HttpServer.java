@@ -19,6 +19,7 @@ import io.netty.handler.stream.ChunkedStream;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.util.AsciiString;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
@@ -55,6 +56,7 @@ public final class HttpServer {
 	private static final boolean LOG_DECODER_FAILURES = Config.getFWBoolean("http.HttpServer.log-decoder-failures", Boolean.FALSE);
 	private static final AttributeKey<Connection> CONNECTION = AttributeKey.newInstance("ConnectionClass");
 	private static final MimetypesFileTypeMap m_mimeTypesMap = new MimetypesFileTypeMap();
+	public static final AsciiString X_REQUEST_ID = AsciiString.cached(Config.getFWString("http.HttpServer.xRequestIdHeaderName", "x-dfw-request-id"));
 
 	private final CounterAndRateMetric m_newConnections;
 	private final CounterAndRateMetric m_disconnections;
@@ -94,14 +96,15 @@ public final class HttpServer {
 	private Channel m_serverConnection;
 	private enum ServerState {Offline, Registering, Binding, BoundListening}
 	private volatile ServerState m_serverState;
+	private final boolean m_addRequestIdHeader;
 
 	private HttpServer(HttpServerBuilder builder) {
 		final String logRoot = HttpServer.class.getCanonicalName() + "." + builder.m_loggerNameSuffix;
 		LOG = LoggerFactory.getLogger(logRoot);
-		CONNECTION_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".connection" + "." + builder.m_loggerNameSuffix);
-		EARLY_DISCONNECT_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".early-disconnect" + "." + builder.m_loggerNameSuffix);
-		REQUEST_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".request" + "." + builder.m_loggerNameSuffix);
-		DATA_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".data" + "." + builder.m_loggerNameSuffix);
+		CONNECTION_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".connection." + builder.m_loggerNameSuffix);
+		EARLY_DISCONNECT_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".early-disconnect." + builder.m_loggerNameSuffix);
+		REQUEST_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".request." + builder.m_loggerNameSuffix);
+		DATA_LOG = LoggerFactory.getLogger(HttpServer.class.getCanonicalName() + ".data." + builder.m_loggerNameSuffix);
 
 		if (LOG.isTraceEnabled()) {
 			LOG.trace("Setting up handlers");
@@ -134,6 +137,7 @@ public final class HttpServer {
 		} else {
 			m_sslContext = null;
 		}
+		m_addRequestIdHeader = builder.m_addRequestIdHeader;
 
 		init();
 	}
@@ -879,14 +883,18 @@ public final class HttpServer {
 					if (CONNECTION_LOG.isDebugEnabled()) {
 						CONNECTION_LOG.debug("[{}-{}] write() done", connectionId(), state.requestId());
 					}
-					if (REQUEST_LOG.isInfoEnabled()) {
-						REQUEST_LOG.info("[{}-{}] responded {} after {} ms", connectionId(), state.requestId(), httpResponseCode, requestTimer.elapsedTimeMS());
-					}
 					if (requestTimer != null) {
+						if (REQUEST_LOG.isInfoEnabled()) {
+							REQUEST_LOG.info("[{}-{}] responded {} after {} ms", connectionId(), state.requestId(), httpResponseCode, requestTimer.elapsedTimeMS());
+						}
 						if (f.isSuccess()) {
 							m_requestRate.record(requestTimer);
 						}
 						requestTimer.close();
+					} else {
+						if (REQUEST_LOG.isInfoEnabled()) {
+							REQUEST_LOG.info("[{}-{}] responded {} after UNKNOWN ms", connectionId(), state.requestId(), httpResponseCode);
+						}
 					}
 
 					// We are not going to trust the client to close the connection, so we will after we flush
@@ -905,8 +913,8 @@ public final class HttpServer {
 			private final HttpVersion m_httpRequestProtocolVersion;
 			private final HttpMethod m_httpRequestMethod;
 			private final long m_requestId;
-			private AtomicBoolean m_responded = new AtomicBoolean();
-			private FullHttpRequest m_httpRequest;
+			private final AtomicBoolean m_responded = new AtomicBoolean();
+			private final FullHttpRequest m_httpRequest;
 			private MetricsEngine.IMetricTimer m_requestTimer;
 			private Map<String,String> m_responseHeaders;
 			private DefaultFullHttpResponse m_httpFullResponse;
@@ -946,7 +954,7 @@ public final class HttpServer {
 				if (m_httpResponseBody != null) {
 					try {
 						m_httpResponseBody.close();
-					} catch (Exception ex) {
+					} catch (Exception ignored) {
 					}
 					m_httpResponseBody = null;
 				}
@@ -1040,8 +1048,7 @@ public final class HttpServer {
 					}
 					headers.add(HttpHeaderNames.CONTENT_LENGTH, fileLength);
 					headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
-					setCORSHeaders(headers);
-					setConnectionHeader(headers);
+					setSystemHeaders(headers);
 
 					final Calendar time = new GregorianCalendar();
 
@@ -1066,7 +1073,7 @@ public final class HttpServer {
 					if (raf != null) {
 						try {
 							raf.close();
-						} catch(Exception ex2) {
+						} catch(Exception ignored) {
 						}
 					}
 					return;
@@ -1120,8 +1127,7 @@ public final class HttpServer {
 				}
 				headers.add(HttpHeaderNames.CONTENT_LENGTH, fileLength);
 				headers.add(HttpHeaderNames.CONTENT_TYPE, contentType);
-				setCORSHeaders(headers);
-				setConnectionHeader(headers);
+				setSystemHeaders(headers);
 
 				final Calendar time = new GregorianCalendar();
 
@@ -1155,8 +1161,7 @@ public final class HttpServer {
 				HttpHeaders headers = response.headers();
 				headers.add(HttpHeaderNames.CONTENT_LENGTH, data.readableBytes());
 
-				setCORSHeaders(headers);
-				setConnectionHeader(headers);
+				setSystemHeaders(headers);
 
 				if (m_responseHeaders != null) {
 					for(Map.Entry<String,String> e : m_responseHeaders.entrySet()) {
@@ -1169,7 +1174,7 @@ public final class HttpServer {
 				requestMoreWork();
 			}
 
-			private void setCORSHeaders(HttpHeaders headers) {
+			private void setSystemHeaders(HttpHeaders headers) {
 				final String secFetchMode = m_httpRequest.headers().get("sec-fetch-mode");
 				final String origin = m_httpRequest.headers().get("origin");
 				if ("cors".equals(secFetchMode) || origin != null) {
@@ -1183,9 +1188,6 @@ public final class HttpServer {
 						headers.add(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_HEADERS);
 					}
 				}
-			}
-
-			private void setConnectionHeader(HttpHeaders headers) {
 				if (!HttpUtil.isKeepAlive(m_httpRequest)) {
 					// We're going to close the connection as soon as the response is sent,
 					// so we should also make it clear for the client.
@@ -1193,13 +1195,15 @@ public final class HttpServer {
 				} else if (m_httpRequest.protocolVersion().equals(HTTP_1_0)) {
 					headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
 				}
+				if (m_addRequestIdHeader) {
+					headers.set(X_REQUEST_ID, connectionId() + "-" + requestId());
+				}
 			}
 
 			@Override
 			public void respondNotModified() {
 				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
 				dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
-				FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
 
 				// Date header
 				addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
@@ -1242,6 +1246,7 @@ public final class HttpServer {
 		private String m_serverKeyStorePassword =  Config.getFWString("http.HttpServer.keyStorePassword", "changeit");
 		private String m_serverKeyStoreFileFormat =  Config.getFWString("http.HttpServer.keyStoreFileFormat", "jks");
 		private String m_serverKeyStoreKeyAlgorithm = KeyManagerFactory.getDefaultAlgorithm();
+		private boolean m_addRequestIdHeader = true;
 
 		public HttpServerBuilder loggerNameSuffix(String name) {
 			m_loggerNameSuffix = name;
@@ -1270,6 +1275,10 @@ public final class HttpServer {
 		}
 		public HttpServerBuilder useSSL(boolean useSSL) {
 			m_useSSL = useSSL;
+			return this;
+		}
+		public HttpServerBuilder addRequestIdHeader(boolean addRequestIdHeader) {
+			m_addRequestIdHeader = addRequestIdHeader;
 			return this;
 		}
 		public HttpServerBuilder sslProtocol(String protocol) {

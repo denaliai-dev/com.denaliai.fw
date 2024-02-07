@@ -42,7 +42,7 @@ public class MinimalHTTPSRequest {
 	}
 
 	public static MinimalHTTPResponse get(String host, int port, String file, final Map<String, String> headers) {
-		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPSRequest.class.getName() + "." + host);
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPSRequest.class.getName());
 		final SocketFactory factory = SSLSocketFactory.getDefault();
 		return MinimalHTTPRequest.get(factory, host, port, file, headers, LOG);
 	}
@@ -71,12 +71,12 @@ public class MinimalHTTPSRequest {
 		return post(host, 443, file, contentType, headers, postedData);
 	}
 	public static MinimalHTTPResponse post(String host, int port, String file, String contentType, String postedData) {
-		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPSRequest.class.getName() + "." + host);
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPSRequest.class.getName());
 		final SocketFactory factory = SSLSocketFactory.getDefault();
 		return MinimalHTTPRequest.post(factory, host, port, file, LOG, contentType, postedData);
 	}
 	public static MinimalHTTPResponse post(String host, int port, String file, String contentType, final Map<String, String> headers, String postedData) {
-		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPSRequest.class.getName() + "." + host);
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPSRequest.class.getName());
 		final SocketFactory factory = SSLSocketFactory.getDefault();
 		return MinimalHTTPRequest.post(factory, host, port, file, LOG, contentType, headers, postedData);
 	}

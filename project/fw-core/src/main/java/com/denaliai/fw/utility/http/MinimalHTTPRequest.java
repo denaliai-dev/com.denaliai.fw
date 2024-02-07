@@ -56,7 +56,7 @@ public class MinimalHTTPRequest {
 		return get(host, port, file, null);
 	}
 	public static MinimalHTTPResponse get(String host, int port, String file, final Map<String, String> headers) {
-		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName() + "." + host);
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName());
 		final SocketFactory factory = SocketFactory.getDefault();
 		return execute(factory, "GET", host, port, file, 15000, LOG, null, headers, null);
 	}
@@ -101,7 +101,7 @@ public class MinimalHTTPRequest {
 		return post(host, port, file, contentType, null, postedData);
 	}
 	public static MinimalHTTPResponse post(String host, int port, String file, String contentType, final Map<String, String> headers, String postedData) {
-		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName() + "." + host);
+		final Logger LOG = LoggerFactory.getLogger(MinimalHTTPRequest.class.getName());
 		final SocketFactory factory = SocketFactory.getDefault();
 		return execute(factory, "POST", host, port, file, 15000, LOG, contentType, headers, postedData);
 	}
