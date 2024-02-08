@@ -770,6 +770,7 @@ public final class HttpServer {
 						if (REQUEST_LOG.isInfoEnabled()) {
 							REQUEST_LOG.info("[{}-{}] early disconnected response after {} ms", connectionId(), ((UserRequestState)msg).requestId(), ((UserRequestState)msg).elapsedTimeMS());
 						}
+						m_currentRequest = null;
 						((UserRequestState)msg).endRequest();
 
 					} else if (m_currentRequest != msg) {
@@ -786,6 +787,7 @@ public final class HttpServer {
 							writeHeaderAndBody((UserRequestState) msg);
 						}
 						restoreReadTimeout();
+						((UserRequestState) msg).endRequest();
 					}
 
 				} else if (msg instanceof Throwable) {
@@ -947,6 +949,7 @@ public final class HttpServer {
 			}
 
 			public void endRequest() {
+				ReferenceCountUtil.safeRelease(m_httpRequest);
 				ReferenceCountUtil.safeRelease(m_httpFullResponse);
 				m_httpFullResponse = null;
 				ReferenceCountUtil.safeRelease(m_httpResponseHeader);
