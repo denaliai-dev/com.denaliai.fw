@@ -174,7 +174,7 @@ public class MinimalHTTPRequest {
 					final InputStream is = socket.getInputStream();
 					final StringBuilder sb = new StringBuilder();
 					int breakCount = 0;
-
+					boolean first = true;
 					try {
 						while(true) {
 							int b = is.read();
@@ -186,14 +186,17 @@ public class MinimalHTTPRequest {
 								continue;
 							}
 							if(b == '\n') {
-								breakCount++;
-								if(breakCount > 1) {
+								if(sb.length() == 0) {
 									break;
+								}
+								if(first) {
+									first = false;
+									response.processFirstLine(sb.toString());
+									continue;
 								}
 								response.processHeader(sb.toString());
 								sb.setLength(0);
 							} else {
-								breakCount = 0;
 								sb.append((char)b);
 							}
 						}

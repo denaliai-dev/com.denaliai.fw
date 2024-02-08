@@ -13,6 +13,7 @@ public class MinimalHTTPResponse {
 
 	public String body;
 	public Throwable error;
+	public int code = -1;
 
 	public MinimalHTTPResponse(Logger logger) {
 		if(logger == null) {
@@ -37,6 +38,12 @@ public class MinimalHTTPResponse {
 
 	public String getHeader(String name) {
 		return m_headers.get(name);
+	}
+
+	public void processFirstLine(String firstLine) {
+		//HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+		final String[] parts = firstLine.split(" ");
+		code = Integer.parseInt(parts[1]);
 	}
 
 	public void processHeader(String headerLine) {
