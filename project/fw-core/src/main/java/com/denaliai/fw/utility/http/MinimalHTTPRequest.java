@@ -192,9 +192,9 @@ public class MinimalHTTPRequest {
 								if(first) {
 									first = false;
 									response.processFirstLine(sb.toString());
-									continue;
+								} else {
+									response.processHeader(sb.toString());
 								}
-								response.processHeader(sb.toString());
 								sb.setLength(0);
 							} else {
 								sb.append((char)b);

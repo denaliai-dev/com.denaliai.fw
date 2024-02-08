@@ -2,7 +2,9 @@ package com.denaliai.fw.http;
 
 import com.denaliai.fw.Application;
 import com.denaliai.fw.utility.http.MinimalHTTPRequest;
+import com.denaliai.fw.utility.http.MinimalHTTPResponse;
 import io.netty.buffer.ByteBufUtil;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -35,8 +37,13 @@ public class MinimalHTTPRequest_Chunked_Test extends TestBase {
 			.build();
 		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(1000));
 
-		String responseData = MinimalHTTPRequest.get("localhost", 10000, "/chunked_response.html").body;
-		Assertions.assertEquals(seq, responseData);
+		MinimalHTTPResponse r = MinimalHTTPRequest.get("localhost", 10000, "/chunked_response.html");
+		Assertions.assertEquals(200, r.code);
+		Assertions.assertEquals(seq, r.body);
+		Assertions.assertEquals(Integer.toString(seq.length()), r.getHeader(HttpHeaderNames.CONTENT_LENGTH.toString()));
+		Assertions.assertEquals("chunked", r.getHeader(HttpHeaderNames.TRANSFER_ENCODING.toString()));
+		Assertions.assertEquals("close", r.getHeader(HttpHeaderNames.CONNECTION.toString()));
+		Assertions.assertNotNull(r.getHeader(HttpServer.X_REQUEST_ID.toString()));
 
 		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(1000));
 	}
