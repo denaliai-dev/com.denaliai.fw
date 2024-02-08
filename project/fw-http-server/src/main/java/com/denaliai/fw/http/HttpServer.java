@@ -1002,7 +1002,10 @@ public final class HttpServer {
 
 			@Override
 			public void respondOk(ByteBuf data) {
-				respond(HttpResponseStatus.OK, data);
+				if (!m_responded.compareAndSet(false, true)) {
+					throw new IllegalStateException("Already responded");
+				}
+				_respond(HttpResponseStatus.OK, data);
 			}
 
 			@Override
@@ -1020,7 +1023,7 @@ public final class HttpServer {
 					try {
 						ifModifiedSinceDate = dateFormatter.parse(ifModifiedSince);
 					} catch(ParseException ex) {
-						respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
+						_respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
 						return;
 					}
 
@@ -1029,7 +1032,7 @@ public final class HttpServer {
 					long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
 					long fileLastModifiedSeconds = file.lastModified() / 1000;
 					if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
-						respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
+						_respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
 						return;
 					}
 				}
@@ -1072,7 +1075,7 @@ public final class HttpServer {
 					}
 				} catch(IOException ex) {
 					LOG.error("Exception reading file {}", file.getAbsolutePath(), ex);
-					respond(INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER);
+					_respond(INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER);
 					if (raf != null) {
 						try {
 							raf.close();
@@ -1102,7 +1105,7 @@ public final class HttpServer {
 					try {
 						ifModifiedSinceDate = dateFormatter.parse(ifModifiedSince);
 					} catch(ParseException ex) {
-						respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
+						_respond(BAD_REQUEST, Unpooled.EMPTY_BUFFER);
 						return;
 					}
 
@@ -1111,7 +1114,7 @@ public final class HttpServer {
 					long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
 					long fileLastModifiedSeconds = lastModifiedTime / 1000;
 					if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
-						respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
+						_respond(NOT_MODIFIED, Unpooled.EMPTY_BUFFER);
 						return;
 					}
 				}
@@ -1160,6 +1163,10 @@ public final class HttpServer {
 				if (!m_responded.compareAndSet(false, true)) {
 					throw new IllegalStateException("Already responded");
 				}
+				_respond(httpResponseStatus, data);
+			}
+
+			private void _respond(HttpResponseStatus httpResponseStatus, ByteBuf data) {
 				DefaultFullHttpResponse response = new DefaultFullHttpResponse(m_httpRequestProtocolVersion, httpResponseStatus, data);
 				HttpHeaders headers = response.headers();
 				headers.add(HttpHeaderNames.CONTENT_LENGTH, data.readableBytes());
@@ -1205,13 +1212,16 @@ public final class HttpServer {
 
 			@Override
 			public void respondNotModified() {
+				if (!m_responded.compareAndSet(false, true)) {
+					throw new IllegalStateException("Already responded");
+				}
 				final SimpleDateFormat dateFormatter = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
 				dateFormatter.setTimeZone(TimeZone.getTimeZone("GMT"));
 
 				// Date header
 				addHeader(HttpHeaderNames.DATE.toString(), dateFormatter.format(System.currentTimeMillis()));
 
-				respond(HttpResponseStatus.OK, Unpooled.EMPTY_BUFFER);
+				_respond(HttpResponseStatus.OK, Unpooled.EMPTY_BUFFER);
 			}
 
 			@Override
