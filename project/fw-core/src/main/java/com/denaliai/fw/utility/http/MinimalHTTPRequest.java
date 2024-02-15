@@ -182,6 +182,7 @@ public class MinimalHTTPRequest {
 								response.error = new Exception("Stream ended before headers");
 								return response;
 							}
+							response.addToRaw(b);
 							if(b == '\r') {
 								continue;
 							}

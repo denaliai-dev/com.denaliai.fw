@@ -9,8 +9,10 @@ import org.slf4j.LoggerFactory;
 public class MinimalHTTPResponse {
 	final private Logger LOG;
 	final private StringBuilder m_responseBuilder = new StringBuilder(8096);
+	final private StringBuilder m_rawBuilder = new StringBuilder(8096);
 	final private Map<String,String> m_headers = new HashMap<>();
 
+	public String rawResponse;
 	public String body;
 	public Throwable error;
 	public int code = -1;
@@ -28,10 +30,12 @@ public class MinimalHTTPResponse {
 	}
 
 	public void appendToBuilder(char[] buffer, int numRead) {
+		m_rawBuilder.append(buffer,0, numRead);
 		m_responseBuilder.append(buffer,0, numRead);
 	}
 
 	public void close() {
+		rawResponse = m_rawBuilder.toString();
 		body = m_responseBuilder.toString();
 		m_responseBuilder.setLength(0);
 	}
@@ -66,6 +70,7 @@ public class MinimalHTTPResponse {
 		final StringBuilder sb = new StringBuilder();
 		while(true) {
 			final char c = (char)is.read();
+			m_rawBuilder.append(c);
 			if(LOG.isTraceEnabled()) {
 				traceBuilder.append(c);
 			}
@@ -96,5 +101,9 @@ public class MinimalHTTPResponse {
 			}
 			sb.append(c);
 		}
+	}
+
+	public void addToRaw(int b) {
+		m_rawBuilder.append((char)b);
 	}
 }
