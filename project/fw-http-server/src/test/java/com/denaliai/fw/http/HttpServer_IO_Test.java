@@ -3,6 +3,7 @@ package com.denaliai.fw.http;
 import com.denaliai.fw.Application;
 import com.denaliai.fw.log4j2.TestCaptureAppender;
 import com.denaliai.fw.utility.http.MinimalHTTPRequest;
+import com.denaliai.fw.utility.http.MinimalHTTPResponse;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import org.junit.jupiter.api.Assertions;
@@ -50,8 +51,9 @@ public class HttpServer_IO_Test extends TestBase {
 			.build();
 		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(1000));
 
-		String responseData = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html").body;
-		Assertions.assertEquals("GOOD", responseData);
+		MinimalHTTPResponse response = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html");
+		Assertions.assertEquals(HttpResponseStatus.OK.code(), response.code);
+		Assertions.assertEquals("GOOD", response.body);
 
 		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(1000));
 	}
@@ -69,13 +71,13 @@ public class HttpServer_IO_Test extends TestBase {
 								response.respondOk(ByteBufUtil.writeAscii(Application.ioBufferAllocator(), "Request URI is '" + request.requestURI() + "' instead of '/nothing_to_get.html'"));
 								return;
 							}
-							response.respondOk(ByteBufUtil.writeAscii(Application.ioBufferAllocator(), "HTTP/1.1 200 OK"));
+							response.respond(HttpResponseStatus.NOT_FOUND, ByteBufUtil.writeAscii(Application.ioBufferAllocator(), ""));
 						})
 						.build();
 		Assertions.assertTrue(httpServer.start().awaitUninterruptibly(1000));
 
 		int code = MinimalHTTPRequest.get("localhost", 10000, "/nothing_to_get.html").code;
-		Assertions.assertEquals(HttpResponseStatus.OK.code(), code);
+		Assertions.assertEquals(HttpResponseStatus.NOT_FOUND.code(), code);
 
 		Assertions.assertTrue(httpServer.stop().awaitUninterruptibly(1000));
 	}
