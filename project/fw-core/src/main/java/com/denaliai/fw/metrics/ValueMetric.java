@@ -12,6 +12,10 @@ public class ValueMetric extends SingleIndexMetricBase {
 		MetricsEngine.add(index, value);
 	}
 
+	public void set(int value) {
+		MetricsEngine.set(index, value);
+	}
+
 	@Override
 	void report(long[] snapshotData, long snapshotDurationInNS, MetricsEngine.ISnapshotConsumer consumer) {
 		consumer.apply(m_consumerKey_Count, snapshotData[index]);
