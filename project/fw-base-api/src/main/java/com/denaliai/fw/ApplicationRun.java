@@ -17,7 +17,11 @@ public class ApplicationRun {
 	private static Runnable m_fatalExitHandler;
 	private static IBootstrapLogger m_bootstrapLogger = new DefaultBootstrapLogger();
 
+	@Deprecated
 	public static void registerBoostrapLogger(IBootstrapLogger bootstrapLogger) {
+		m_bootstrapLogger = bootstrapLogger;
+	}
+	public static void registerBootstrapLogger(IBootstrapLogger bootstrapLogger) {
 		m_bootstrapLogger = bootstrapLogger;
 	}
 

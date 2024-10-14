@@ -26,7 +26,8 @@ public class Log4j2LogAdapter implements ILoggingImplementation {
 		} else {
 			System.setProperty("log4j.configurationFile", "core-log4j2.xml");
 		}
-		PluginManager.addPackage("com.denaliai.fw.log4j2");
+		// Deprecated, moved to maven build step
+//		PluginManager.addPackage("com.denaliai.fw.log4j2");
 		initLogging();
 	}
 
