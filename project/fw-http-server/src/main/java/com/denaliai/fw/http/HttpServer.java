@@ -44,7 +44,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_0;
-import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 public final class HttpServer {
 	private static final String DEFAULT_SSL_PROTOCOL = "TLSv1.2";
